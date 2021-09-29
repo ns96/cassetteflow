@@ -9,7 +9,6 @@
 
 static const char *TAG = "MINIMODEM_ENCODER";
 
-
 typedef struct minimodem_encoder
 {
     minimodem_struct minimodem_str;
@@ -39,29 +38,29 @@ static esp_err_t _minimodem_encoder_close(audio_element_handle_t self)
 
 static int _minimodem_encoder_process(audio_element_handle_t self, char *in_buffer, int in_len)
 {
-	//fprintf(stderr, "Dbg1\n");
+    //fprintf(stderr, "Dbg1\n");
     minimodem_encoder_t *minimodem_enc = (minimodem_encoder_t *)audio_element_getdata(self);
     //fprintf(stderr, "Dbg2 %zu\n", minimodem_enc->minimodem_str.sample_rate);
     int r_size = audio_element_input(self, in_buffer, in_len);
     //fprintf(stderr, "Dbg3\n");
     int out_len = r_size;
     if (r_size > 0) {
-        out_len = fsk_transmit_buf(minimodem_enc->minimodem_str, self, (unsigned char*)in_buffer, in_len);
+        out_len = fsk_transmit_buf(minimodem_enc->minimodem_str, self, (unsigned char *)in_buffer, in_len);
         //audio_element_update_byte_pos(self, nbytes);
-        fprintf(stderr, "Dbg4\n");
+//        fprintf(stderr, "Dbg4\n");
         //out_len = audio_element_output(self, in_buffer, r_size);
         if (out_len > 0) {
             audio_element_update_byte_pos(self, out_len);
         }
     }
 
-	fprintf(stderr, "Dbg2\n");
+//	fprintf(stderr, "Dbg2\n");
     return out_len;
 }
 
 audio_element_handle_t minimodem_encoder_init(minimodem_encoder_cfg_t *config)
 {
-	fprintf(stderr, "here i1\n");
+//	fprintf(stderr, "here i1\n");
     minimodem_encoder_t *minimodem_enc = audio_calloc(1, sizeof(minimodem_encoder_t));
     AUDIO_MEM_CHECK(TAG, minimodem_enc, {return NULL;});
     audio_element_cfg_t cfg = DEFAULT_AUDIO_ELEMENT_CONFIG();
@@ -86,6 +85,6 @@ audio_element_handle_t minimodem_encoder_init(minimodem_encoder_cfg_t *config)
     AUDIO_MEM_CHECK(TAG, el, {audio_free(minimodem_enc); return NULL;});
     audio_element_setdata(el, minimodem_enc);
     ESP_LOGD(TAG, "minimodem_encoder_init");
-    fprintf(stderr, "here i2\n");
+//    fprintf(stderr, "here i2\n");
     return el;
 }
