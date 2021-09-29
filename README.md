@@ -9,3 +9,7 @@
 2. Open CLion's terminal and run to set ESP-IDF environment variables: `. $HOME/esp/esp-idf/export.sh`
 3. Edit/update
 4. Build project: `idf.py build`
+
+## Setup CLion
+1. https://www.jetbrains.com/help/clion/esp-idf.html#cmake-setup
+2. 
