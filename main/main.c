@@ -19,6 +19,15 @@ static const char *TAG = "cf_main";
 
 void app_main(void)
 {
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+        // NVS partition was truncated and needs to be erased
+        // Retry nvs_flash_init
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(esp_netif_init());
+
     // FIXME change to INFO after debugging
     esp_log_level_set("*", ESP_LOG_DEBUG);
     esp_log_level_set(TAG, ESP_LOG_DEBUG);
@@ -29,7 +38,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[1.1] Initialize and start peripherals");
     audio_board_key_init(set);
-    audio_board_sdcard_init(set, SD_MODE_4_LINE);
+    audio_board_sdcard_init(set, SD_MODE_1_LINE);
 
     ESP_LOGI(TAG, "[1.3] Scan for new MP3 files on SD card");
     ESP_ERROR_CHECK(mp3db_scan());
@@ -38,10 +47,6 @@ void app_main(void)
     audio_board_handle_t board_handle = audio_board_init();
     audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH,
                          AUDIO_HAL_CTRL_START);
-
-    ESP_ERROR_CHECK(nvs_flash_init());
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     ESP_LOGI(TAG, "[ 3 ] Connect to the network");
     ESP_ERROR_CHECK(network_connect());
@@ -53,7 +58,9 @@ void app_main(void)
     ESP_ERROR_CHECK(keys_start(set, board_handle));
 
     // main loop
-    while (1);
+    while (1) {
+        vTaskDelay(100);
+    }
 
     esp_periph_set_destroy(set);
     keys_stop();
