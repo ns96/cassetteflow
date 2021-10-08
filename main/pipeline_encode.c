@@ -147,3 +147,8 @@ esp_err_t pipeline_encode_stop(void)
 {
     return ESP_OK;
 }
+
+void pipeline_encode_status(char *buf, int buf_size)
+{
+
+}

@@ -12,14 +12,14 @@
 #include "network.h"
 #include "config.h"
 
-#define NR_OF_IP_ADDRESSES_TO_WAIT_FOR (s_active_interfaces)
-
 static const char *TAG = "cf_network";
 
 static esp_periph_handle_t wifi_handle;
 
 esp_err_t network_connect(void)
 {
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
     esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
     esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
     periph_wifi_cfg_t wifi_cfg = {
@@ -33,5 +33,7 @@ esp_err_t network_connect(void)
 
 esp_err_t network_disconnect(void)
 {
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
     return esp_periph_stop(wifi_handle);
 }

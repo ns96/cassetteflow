@@ -7,5 +7,7 @@
 
 esp_err_t pipeline_encode_start(char *url);
 esp_err_t pipeline_encode_stop(void);
+esp_err_t pipeline_encode_mix(char *url);
+void pipeline_encode_status(char *buf, int buf_size);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_PIPELINE_ENCODE_H
