@@ -14,6 +14,7 @@
 #include "network.h"
 #include "keys.h"
 #include "mp3db.h"
+#include "pipeline.h"
 
 static const char *TAG = "cf_main";
 
@@ -57,9 +58,12 @@ void app_main(void)
     ESP_LOGI(TAG, "[ 5 ] Create and start input key service");
     ESP_ERROR_CHECK(keys_start(set, board_handle));
 
+    ESP_LOGI(TAG, "[ 6 ] Set up pipeline");
+    pipeline_init();
+
     // main loop
     while (1) {
-        vTaskDelay(100);
+        pipeline_main();
     }
 
     esp_periph_set_destroy(set);

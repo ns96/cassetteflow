@@ -5,9 +5,10 @@
 #ifndef CASSETTEFLOW_FIRMWARE_MAIN_PIPELINE_ENCODE_H
 #define CASSETTEFLOW_FIRMWARE_MAIN_PIPELINE_ENCODE_H
 
-esp_err_t pipeline_encode_start(char *url);
-esp_err_t pipeline_encode_stop(void);
-esp_err_t pipeline_encode_mix(char *url);
+esp_err_t pipeline_encode_start(audio_event_iface_handle_t evt, char *url);
+esp_err_t pipeline_encode_maybe_handle_event(audio_event_iface_handle_t evt, audio_event_iface_msg_t *msg);
+esp_err_t pipeline_encode_stop();
 void pipeline_encode_status(char *buf, int buf_size);
+bool pipeline_encode_is_running(void);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_PIPELINE_ENCODE_H

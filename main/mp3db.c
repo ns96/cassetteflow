@@ -105,7 +105,7 @@ static bool mp3db_file_exists(const char *filepath)
 }
 
 /**
- * Check if file present in the DB
+ * Get file info from the DB
  * @param mp3id input mp3id (10 characters hash)
  * @param filepath output full path with filename (/sdcard/file.mp3) (at least SDCARD_FILE_PREV_NAME-1 bytes)
  * @param duration output duration in seconds

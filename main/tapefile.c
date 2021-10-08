@@ -164,3 +164,16 @@ esp_err_t tapefile_create(const char side, const char *tape, char *data, int mut
 
     return ESP_OK;
 }
+
+bool tapefile_is_present(const char side)
+{
+    struct stat file_stat;
+    const char *filepath = tapefile_get_path(side);
+
+    if (stat(filepath, &file_stat) == -1) {
+        ESP_LOGE(TAG, "Failed to stat file : %s", filepath);
+        return false;
+    }
+
+    return true;
+}

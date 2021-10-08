@@ -7,6 +7,7 @@
 #include <esp_log.h>
 #include <input_key_service.h>
 #include "keys.h"
+#include "pipeline.h"
 
 static const char *TAG = "cf_keys";
 
@@ -24,15 +25,15 @@ static esp_err_t input_key_service_cb(periph_service_handle_t handle, periph_ser
         switch ((int)evt->data) {
             case INPUT_KEY_USER_ID_REC:
                 ESP_LOGI(TAG, "[ * ] [F1] input key event");
-                // TODO
+                pipeline_set_side('a');
                 break;
             case INPUT_KEY_USER_ID_MODE:
                 ESP_LOGI(TAG, "[ * ] [F2] input key event");
-                // TODO
+                pipeline_set_side('b');
                 break;
             case INPUT_KEY_USER_ID_PLAY:
                 ESP_LOGI(TAG, "[ * ] [Play] input key event");
-                // TODO
+                pipeline_handle_play();
                 break;
             case INPUT_KEY_USER_ID_SET:
                 ESP_LOGI(TAG, "[ * ] [Set] input key event");

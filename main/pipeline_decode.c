@@ -3,11 +3,17 @@
 //
 
 #include <esp_err.h>
+#include <audio_event_iface.h>
 #include "pipeline_decode.h"
 
 static const char *TAG = "cf_pipeline_decode";
 
 esp_err_t pipeline_decode_start(void)
+{
+    return ESP_OK;
+}
+
+esp_err_t pipeline_decode_maybe_handle_event(audio_event_iface_handle_t evt, audio_event_iface_msg_t *msg)
 {
     return ESP_OK;
 }
