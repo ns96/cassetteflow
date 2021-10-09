@@ -91,9 +91,11 @@ esp_err_t pipeline_encode_start(audio_event_iface_handle_t evt, char *url)
     return ESP_OK;
 }
 
-esp_err_t pipeline_encode_event_loop(audio_event_iface_handle_t evt)
+bool pipeline_encode_event_loop(audio_event_iface_handle_t evt)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
+
+    bool encoding_finished = false;
 
     while (1) {
         audio_event_iface_msg_t msg;
@@ -107,14 +109,17 @@ esp_err_t pipeline_encode_event_loop(audio_event_iface_handle_t evt)
         if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT && msg.source == (void *)i2s_stream_writer
             && msg.cmd == AEL_MSG_CMD_REPORT_STATUS
             && (((int)msg.data == AEL_STATUS_STATE_STOPPED) || ((int)msg.data == AEL_STATUS_STATE_FINISHED))) {
-            ESP_LOGW(TAG, "[ * ] Stop event received");
+            encoding_finished = ((int)msg.data == AEL_STATUS_STATE_FINISHED);
+            ESP_LOGW(TAG, "[ * ] Stop event received, finished:%d", encoding_finished);
             break;
         }
     }
 
-    pipeline_encode_stop();
+    if (encoding_finished) {
+        pipeline_encode_stop();
+    }
 
-    return ESP_OK;
+    return encoding_finished;
 }
 
 esp_err_t pipeline_encode_stop()

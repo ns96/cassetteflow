@@ -28,10 +28,13 @@ static audio_event_iface_handle_t evt;
 static void pipeline_event_handler(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
 {
     switch (id) {
-        case PIPELINE_ENCODE_STARTED:
-            pipeline_encode_event_loop(evt);
-            // encode finished, save to the database
-            tapedb_file_save(current_encoding_side);
+        case PIPELINE_ENCODE_STARTED: {
+            bool encoding_finished = pipeline_encode_event_loop(evt);
+            if (encoding_finished) {
+                // encode finished, save to the database
+                tapedb_file_save(current_encoding_side);
+            }
+        }
             break;
     }
 }
