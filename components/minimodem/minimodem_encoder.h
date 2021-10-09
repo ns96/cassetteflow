@@ -1,6 +1,3 @@
-// Copyright 2018 Espressif Systems (Shanghai) PTE LTD
-// All rights reserved.
-
 #ifndef _MINIMODEM_ENCODER_H_
 #define _MINIMODEM_ENCODER_H_
 
@@ -14,7 +11,7 @@ extern "C" {
 #endif
 
 /**
- * @brief      WAV Encoder configurations
+ * @brief      Minimodem Encoder configurations
  */
 typedef struct {
     int                     out_rb_size;    /*!< Size of output ringbuffer */
@@ -52,7 +49,7 @@ typedef struct {
 
 
 /**
- * @brief      Create a handle to an Audio Element to encode incoming data using WAV format
+ * @brief      Create a handle to an Audio Element to encode incoming data using minimodem
  *
  * @param      config  The configuration
  *

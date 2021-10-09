@@ -1,5 +1,3 @@
-// Copyright 2018 Espressif Systems (Shanghai) PTE LTD
-// All rights reserved.
 
 #include "esp_log.h"
 #include "audio_mem.h"
