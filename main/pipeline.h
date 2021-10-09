@@ -10,9 +10,13 @@
 #include "audio_pipeline.h"
 #include "internal.h"
 
+extern esp_event_loop_handle_t pipeline_event_loop;
+
+ESP_EVENT_DECLARE_BASE(PIPELINE_EVENTS);         // declaration of the task events family
+
 enum
 {
-    APP_MSG_ENCODE_FINISHED = 0,
+    PIPELINE_ENCODE_STARTED = 0,
 };
 
 void pipeline_set_side(const char side);

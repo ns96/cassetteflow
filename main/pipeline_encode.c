@@ -83,53 +83,36 @@ esp_err_t pipeline_encode_start(audio_event_iface_handle_t evt, char *url)
     ESP_LOGI(TAG, "[5.1] Listen for all pipeline events");
     audio_pipeline_set_listener(pipeline, evt);
 
-    ESP_LOGI(TAG, "[3.1] Set up  i2s clock");
-    i2s_stream_set_clk(i2s_stream_writer, PLAYBACK_RATE, PLAYBACK_BITS, PLAYBACK_CHANNEL);
-
     ESP_LOGI(TAG, "[ * ] Starting audio pipeline");
     audio_pipeline_run(pipeline);
+
+    esp_event_post_to(pipeline_event_loop, PIPELINE_EVENTS, PIPELINE_ENCODE_STARTED, NULL, 0, portMAX_DELAY);
 
     return ESP_OK;
 }
 
-esp_err_t pipeline_encode_maybe_handle_event(audio_event_iface_handle_t evt, audio_event_iface_msg_t *msg)
+esp_err_t pipeline_encode_event_loop(audio_event_iface_handle_t evt)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
-    if (msg->source_type == AUDIO_ELEMENT_TYPE_ELEMENT) {
-        // Set music info for a new song to be played
-#if 0
-        if (msg.source == (void *) mp3_decoder
-                && msg.cmd == AEL_MSG_CMD_REPORT_MUSIC_INFO) {
-                audio_element_info_t music_info = {0};
-                audio_element_getinfo(mp3_decoder, &music_info);
-                ESP_LOGI(TAG, "[ * ] Received music info from mp3 decoder, sample_rates=%d, bits=%d, ch=%d",
-                         music_info.sample_rates, music_info.bits, music_info.channels);
-                audio_element_setinfo(i2s_stream_writer, &music_info);
-                rsp_filter_set_src_info(rsp_handle, music_info.sample_rates, music_info.channels);
-                continue;
-            }
-#endif
-        // Advance to the next song when previous finishes
-        if (msg->source == (void *)i2s_stream_writer
-            && msg->cmd == AEL_MSG_CMD_REPORT_STATUS) {
+    while (1) {
+        audio_event_iface_msg_t msg;
+        esp_err_t ret = audio_event_iface_listen(evt, &msg, portMAX_DELAY);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "[ * ] Event interface error : %d", ret);
+            continue;
+        }
 
-            el_state = audio_element_get_state(i2s_stream_writer);
-
-            if (el_state == AEL_STATE_FINISHED) {
-                ESP_LOGI(TAG, "[ * ] Finished encode");
-
-                audio_event_iface_msg_t msg_out = {0};
-                msg_out.cmd = APP_MSG_ENCODE_FINISHED;
-                msg_out.data = NULL;
-                msg_out.data_len = 0;
-                msg->source = NULL;
-                msg->source_type = AUDIO_ELEMENT_TYPE_PLAYER;
-
-                return audio_event_iface_sendout(evt, &msg_out);
-            }
+        /* Stop when the last pipeline element (i2s_stream_writer in this case) receives stop event */
+        if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT && msg.source == (void *)i2s_stream_writer
+            && msg.cmd == AEL_MSG_CMD_REPORT_STATUS
+            && (((int)msg.data == AEL_STATUS_STATE_STOPPED) || ((int)msg.data == AEL_STATUS_STATE_FINISHED))) {
+            ESP_LOGW(TAG, "[ * ] Stop event received");
+            break;
         }
     }
+
+    pipeline_encode_stop();
 
     return ESP_OK;
 }

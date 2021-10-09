@@ -15,10 +15,26 @@
 
 static const char *TAG = "cf_pipeline";
 
+esp_event_loop_handle_t pipeline_event_loop;
+
+/* Event source task related definitions */
+ESP_EVENT_DEFINE_BASE(PIPELINE_EVENTS);
+
 static enum cf_mode pipeline_mode = MODE_DECODE;
 static enum cf_pipeline_state pipeline_state = PIPELINE_STOPPED;
 static char current_encoding_side;
 static audio_event_iface_handle_t evt;
+
+static void pipeline_event_handler(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
+{
+    switch (id) {
+        case PIPELINE_ENCODE_STARTED:
+            pipeline_encode_event_loop(evt);
+            // encode finished, save to the database
+            tapedb_file_save(current_encoding_side);
+            break;
+    }
+}
 
 void pipeline_set_side(const char side)
 {
@@ -131,6 +147,20 @@ esp_err_t pipeline_init(audio_event_iface_handle_t event_handle)
 {
     evt = event_handle;
 
+    esp_event_loop_args_t loop_args = {
+        .queue_size = 5,
+        .task_name = "pipeline_loop_task", // task will be created
+        .task_priority = uxTaskPriorityGet(NULL),
+        .task_stack_size = 4096,
+        .task_core_id = tskNO_AFFINITY
+    };
+
+    ESP_ERROR_CHECK(esp_event_loop_create(&loop_args, &pipeline_event_loop));
+
+    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(pipeline_event_loop, PIPELINE_EVENTS,
+                                                             PIPELINE_ENCODE_STARTED, pipeline_event_handler,
+                                                             NULL, NULL));
+
     if (pipeline_mode == MODE_DECODE) {
         pipeline_decode_start();
     }
@@ -144,35 +174,6 @@ esp_err_t pipeline_init(audio_event_iface_handle_t event_handle)
  */
 esp_err_t pipeline_main(void)
 {
-    audio_event_iface_msg_t msg;
-//    esp_err_t ret = audio_event_iface_listen(evt, &msg, portMAX_DELAY);
-//    if (ret != ESP_OK) {
-//        ESP_LOGE(TAG, "[ * ] Event interface error : %d", ret);
-//        return ESP_FAIL;
-//    }
-
-    ESP_LOGI(TAG, "main: msg source_type:%d cmd:%d", msg.source_type, msg.cmd);
-
-    if (msg.source_type == AUDIO_ELEMENT_TYPE_PLAYER) {
-        // handle events
-        switch (msg.cmd) {
-            case APP_MSG_ENCODE_FINISHED:
-                // stop audio pipeline
-                pipeline_stop_encoding();
-                // save to the database
-                tapedb_file_save(current_encoding_side);
-                break;
-        }
-    }
-
-    switch (pipeline_mode) {
-        case MODE_DECODE:
-            pipeline_decode_maybe_handle_event(evt, &msg);
-            break;
-        case MODE_ENCODE:
-            pipeline_encode_maybe_handle_event(evt, &msg);
-            break;
-    }
-
+    vTaskDelay(100);
     return ESP_OK;
 }

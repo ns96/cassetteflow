@@ -73,8 +73,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[ 8 ] Main loop");
     while (1) {
-        vTaskDelay(100);
-//        pipeline_main();
+        pipeline_main();
     }
 
     /* Stop all peripherals before removing the listener */
