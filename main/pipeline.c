@@ -6,6 +6,7 @@
 #include <string.h>
 #include <audio_event_iface.h>
 #include <audio_common.h>
+#include <esp_peripherals.h>
 #include "pipeline.h"
 #include "pipeline_decode.h"
 #include "pipeline_encode.h"
@@ -21,6 +22,8 @@ static audio_event_iface_handle_t evt;
 
 void pipeline_set_side(const char side)
 {
+    ESP_LOGI(TAG, "set_side: %c", side);
+
     if (pipeline_mode == MODE_DECODE || !pipeline_encode_is_running()) {
         current_encoding_side = side;
     }
@@ -28,6 +31,8 @@ void pipeline_set_side(const char side)
 
 void pipeline_handle_play(void)
 {
+    ESP_LOGI(TAG, "handle play");
+
     switch (pipeline_mode) {
         case MODE_DECODE:
             // TODO
@@ -91,6 +96,8 @@ void pipeline_current_info_str(char *str, size_t str_len)
  */
 esp_err_t pipeline_start_encoding(const char side)
 {
+    ESP_LOGI(TAG, "start_encoding");
+
     char file_uri[128];
 
     current_encoding_side = side;
@@ -110,6 +117,8 @@ esp_err_t pipeline_start_encoding(const char side)
  */
 esp_err_t pipeline_stop_encoding()
 {
+    ESP_LOGI(TAG, "stop_encoding");
+
     if (pipeline_mode == MODE_ENCODE) {
         // stop audio pipeline
         return pipeline_encode_stop();
@@ -118,10 +127,13 @@ esp_err_t pipeline_stop_encoding()
     }
 }
 
-esp_err_t pipeline_init(void)
+esp_err_t pipeline_init(audio_event_iface_handle_t event_handle)
 {
-    audio_event_iface_cfg_t evt_cfg = AUDIO_EVENT_IFACE_DEFAULT_CFG();
-    evt = audio_event_iface_init(&evt_cfg);
+    evt = event_handle;
+
+    if (pipeline_mode == MODE_DECODE) {
+        pipeline_decode_start();
+    }
 
     return evt != NULL ? ESP_OK : ESP_FAIL;
 }
@@ -133,11 +145,13 @@ esp_err_t pipeline_init(void)
 esp_err_t pipeline_main(void)
 {
     audio_event_iface_msg_t msg;
-    esp_err_t ret = audio_event_iface_listen(evt, &msg, portMAX_DELAY);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "[ * ] Event interface error : %d", ret);
-        return ESP_FAIL;
-    }
+//    esp_err_t ret = audio_event_iface_listen(evt, &msg, portMAX_DELAY);
+//    if (ret != ESP_OK) {
+//        ESP_LOGE(TAG, "[ * ] Event interface error : %d", ret);
+//        return ESP_FAIL;
+//    }
+
+    ESP_LOGI(TAG, "main: msg source_type:%d cmd:%d", msg.source_type, msg.cmd);
 
     if (msg.source_type == AUDIO_ELEMENT_TYPE_PLAYER) {
         // handle events
@@ -153,6 +167,7 @@ esp_err_t pipeline_main(void)
 
     switch (pipeline_mode) {
         case MODE_DECODE:
+            pipeline_decode_maybe_handle_event(evt, &msg);
             break;
         case MODE_ENCODE:
             pipeline_encode_maybe_handle_event(evt, &msg);

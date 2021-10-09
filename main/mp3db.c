@@ -170,6 +170,8 @@ static void mp3db_sdcard_url_save_cb(void *user_data, char *url)
 // scan for new mp3 files on the SD card
 esp_err_t mp3db_scan(void)
 {
+    ESP_LOGI(TAG, "scan");
+
     // scan for mp3 files
     sdcard_scan(mp3db_sdcard_url_save_cb, "/sdcard", 0, (const char *[]){"mp3"},
                 1, NULL);

@@ -65,7 +65,8 @@ static esp_err_t input_key_service_cb(periph_service_handle_t handle, periph_ser
 
 esp_err_t keys_start(esp_periph_set_handle_t esp_periph_set_handle, audio_board_handle_t board_handle)
 {
-    ESP_LOGI(TAG, "[ 3 ] Create and start input key service");
+    ESP_LOGI(TAG, "start");
+
     input_key_service_info_t input_key_info[] = INPUT_KEY_DEFAULT_INFO();
     input_key_service_cfg_t input_cfg = INPUT_KEY_SERVICE_DEFAULT_CONFIG();
     input_cfg.handle = esp_periph_set_handle;
@@ -78,6 +79,8 @@ esp_err_t keys_start(esp_periph_set_handle_t esp_periph_set_handle, audio_board_
 
 esp_err_t keys_stop(void)
 {
+    ESP_LOGI(TAG, "stop");
+
     periph_service_destroy(input_ser);
     return ESP_OK;
 }

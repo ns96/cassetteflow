@@ -18,7 +18,7 @@ static esp_periph_handle_t wifi_handle;
 
 esp_err_t network_connect(void)
 {
-    ESP_LOGI(TAG, "%s", __FUNCTION__);
+    ESP_LOGI(TAG, "connect");
 
     esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
     esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
@@ -33,7 +33,7 @@ esp_err_t network_connect(void)
 
 esp_err_t network_disconnect(void)
 {
-    ESP_LOGI(TAG, "%s", __FUNCTION__);
+    ESP_LOGI(TAG, "disconnect");
 
     return esp_periph_stop(wifi_handle);
 }

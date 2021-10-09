@@ -29,9 +29,12 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(esp_netif_init());
 
-    // FIXME change to INFO after debugging
-    esp_log_level_set("*", ESP_LOG_DEBUG);
+    esp_log_level_set("*", ESP_LOG_INFO);
+#if 1
     esp_log_level_set(TAG, ESP_LOG_DEBUG);
+    esp_log_level_set("AUDIO_ELEMENT", ESP_LOG_DEBUG);
+    esp_log_level_set("AUDIO_PIPELINE", ESP_LOG_DEBUG);
+#endif
 
     ESP_LOGI(TAG, "[1.0] Initialize peripherals management");
     esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
@@ -46,7 +49,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[ 2 ] Init board");
     audio_board_handle_t board_handle = audio_board_init();
-    audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH,
+    audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_DECODE,
                          AUDIO_HAL_CTRL_START);
 
     ESP_LOGI(TAG, "[ 3 ] Connect to the network");
@@ -55,17 +58,32 @@ void app_main(void)
     ESP_LOGI(TAG, "[ 4 ] Create and start HTTP server");
     ESP_ERROR_CHECK(http_server_start());
 
-    ESP_LOGI(TAG, "[ 5 ] Create and start input key service");
-    ESP_ERROR_CHECK(keys_start(set, board_handle));
+    // FIXME uncomment
+//    ESP_LOGI(TAG, "[ 5 ] Create and start input key service");
+//    ESP_ERROR_CHECK(keys_start(set, board_handle));
 
-    ESP_LOGI(TAG, "[ 6 ] Set up pipeline");
-    pipeline_init();
+    audio_event_iface_cfg_t evt_cfg = AUDIO_EVENT_IFACE_DEFAULT_CFG();
+    audio_event_iface_handle_t evt = audio_event_iface_init(&evt_cfg);
 
-    // main loop
+    ESP_LOGI(TAG, "[ 6 ] Listening for events from peripherals");
+    audio_event_iface_set_listener(esp_periph_set_get_event_iface(set), evt);
+
+    ESP_LOGI(TAG, "[ 7 ] Set up pipeline");
+    pipeline_init(evt);
+
+    ESP_LOGI(TAG, "[ 8 ] Main loop");
     while (1) {
-        pipeline_main();
+        vTaskDelay(100);
+//        pipeline_main();
     }
 
-    esp_periph_set_destroy(set);
+    /* Stop all peripherals before removing the listener */
+    esp_periph_set_stop_all(set);
+    audio_event_iface_remove_listener(esp_periph_set_get_event_iface(set), evt);
+
+    /* Make sure audio_pipeline_remove_listener & audio_event_iface_remove_listener are called before destroying event_iface */
+    audio_event_iface_destroy(evt);
+
     keys_stop();
+    esp_periph_set_destroy(set);
 }

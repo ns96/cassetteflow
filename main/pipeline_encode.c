@@ -13,9 +13,13 @@
 #include "pipeline_encode.h"
 #include "pipeline.h"
 
+#define PLAYBACK_RATE       48000
+#define PLAYBACK_CHANNEL    2
+#define PLAYBACK_BITS       16
+
 static const char *TAG = "cf_pipeline_encode";
 
-static audio_pipeline_handle_t pipeline;
+static audio_pipeline_handle_t pipeline = NULL;
 //audio_element_handle_t i2s_stream_writer, mp3_decoder, fatfs_stream_reader, rsp_handle;
 static audio_element_handle_t i2s_stream_writer, minimodem_encoder, fatfs_stream_reader;
 static audio_element_state_t el_state = AEL_STATE_INIT;
@@ -24,14 +28,22 @@ esp_err_t pipeline_encode_start(audio_event_iface_handle_t evt, char *url)
 {
     el_state = AEL_STATE_RUNNING;
 
-    ESP_LOGI(TAG, "[4.0] Create audio pipeline for playback");
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
+    if (pipeline != NULL) {
+        ESP_LOGE(TAG, "encode_stop: pipeline already started");
+        return ESP_FAIL;
+    }
+
     audio_pipeline_cfg_t pipeline_cfg = DEFAULT_AUDIO_PIPELINE_CONFIG();
     pipeline = audio_pipeline_init(&pipeline_cfg);
-    mem_assert(pipeline);
+    if (pipeline == NULL) {
+        return ESP_FAIL;
+    }
 
     ESP_LOGI(TAG, "[4.1] Create i2s stream to write data to codec chip");
     i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT();
-    i2s_cfg.i2s_config.sample_rate = 48000; // codec chip consumes 60000 16-bit stereo samples per second in that mode
+    i2s_cfg.i2s_config.sample_rate = PLAYBACK_RATE; // codec chip consumes 60000 16-bit stereo samples per second in that mode
 
     //i2s_cfg.i2s_config.sample_rate = 41000; // codec chip consumes 51250 16-bit stereo samples per second in that mode
     // so it's x1.25
@@ -42,9 +54,7 @@ esp_err_t pipeline_encode_start(audio_event_iface_handle_t evt, char *url)
 
     ESP_LOGI(TAG, "[4.2] Create minimodem encoder");
     minimodem_encoder_cfg_t minimodem_cfg = DEFAULT_MINIMODEM_ENCODER_CONFIG();
-    ESP_LOGI(TAG, "[4.21] Create minimodem encoder_ok");
     minimodem_encoder = minimodem_encoder_init(&minimodem_cfg);
-    ESP_LOGI(TAG, "[4.22] minimodem encoder init ok");
 
     /* ZL38063 audio chip on board of ESP32-LyraTD-MSC does not support 44.1 kHz sampling frequency,
        so resample filter has been added to convert audio data to other rates accepted by the chip.
@@ -73,11 +83,19 @@ esp_err_t pipeline_encode_start(audio_event_iface_handle_t evt, char *url)
     ESP_LOGI(TAG, "[5.1] Listen for all pipeline events");
     audio_pipeline_set_listener(pipeline, evt);
 
+    ESP_LOGI(TAG, "[3.1] Set up  i2s clock");
+    i2s_stream_set_clk(i2s_stream_writer, PLAYBACK_RATE, PLAYBACK_BITS, PLAYBACK_CHANNEL);
+
+    ESP_LOGI(TAG, "[ * ] Starting audio pipeline");
+    audio_pipeline_run(pipeline);
+
     return ESP_OK;
 }
 
 esp_err_t pipeline_encode_maybe_handle_event(audio_event_iface_handle_t evt, audio_event_iface_msg_t *msg)
 {
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
     if (msg->source_type == AUDIO_ELEMENT_TYPE_ELEMENT) {
         // Set music info for a new song to be played
 #if 0
@@ -118,31 +136,18 @@ esp_err_t pipeline_encode_maybe_handle_event(audio_event_iface_handle_t evt, aud
 
 esp_err_t pipeline_encode_stop()
 {
-    ESP_LOGI(TAG, "[ 7 ] Stop audio_pipeline");
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
+    if (pipeline == NULL) {
+        ESP_LOGE(TAG, "encode_stop: pipeline not started");
+        return ESP_FAIL;
+    }
+
     audio_pipeline_stop(pipeline);
     audio_pipeline_wait_for_stop(pipeline);
-    audio_pipeline_terminate(pipeline);
 
-    audio_pipeline_unregister(pipeline, minimodem_encoder);
-    audio_pipeline_unregister(pipeline, i2s_stream_writer);
-    //audio_pipeline_unregister(pipeline, rsp_handle);
-
-    /* Terminate the pipeline before removing the listener */
-    audio_pipeline_remove_listener(pipeline);
-
-    /* Stop all peripherals before removing the listener */
-    // FIXME::
-//    esp_periph_set_stop_all(set);
-//    audio_event_iface_remove_listener(esp_periph_set_get_event_iface(set), evt);
-
-    /* Make sure audio_pipeline_remove_listener & audio_event_iface_remove_listener are called before destroying event_iface */
-//    audio_event_iface_destroy(evt);
-
-    /* Release all resources */
     audio_pipeline_deinit(pipeline);
-    audio_element_deinit(i2s_stream_writer);
-    audio_element_deinit(minimodem_encoder);
-    //audio_element_deinit(rsp_handle);
+    pipeline = NULL;
 
     el_state = AEL_STATE_FINISHED;
 
@@ -151,6 +156,7 @@ esp_err_t pipeline_encode_stop()
 
 void pipeline_encode_status(char *buf, int buf_size)
 {
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
     // TODO use el_state
 }
 
