@@ -17,6 +17,7 @@ ESP_EVENT_DECLARE_BASE(PIPELINE_EVENTS);         // declaration of the task even
 enum
 {
     PIPELINE_ENCODE_STARTED = 0,
+    PIPELINE_DECODE_STARTED = 1,
 };
 
 void pipeline_set_side(const char side);

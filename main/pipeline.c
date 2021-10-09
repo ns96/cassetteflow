@@ -34,7 +34,10 @@ static void pipeline_event_handler(void *handler_args, esp_event_base_t base, in
                 // encode finished, save to the database
                 tapedb_file_save(current_encoding_side);
             }
+            break;
         }
+        case PIPELINE_DECODE_STARTED:
+            pipeline_decode_event_loop(evt);
             break;
     }
 }
@@ -152,7 +155,7 @@ esp_err_t pipeline_init(audio_event_iface_handle_t event_handle)
                                                              NULL, NULL));
 
     if (pipeline_mode == MODE_DECODE) {
-        pipeline_decode_start();
+        pipeline_decode_start(NULL);
     }
 
     return evt != NULL ? ESP_OK : ESP_FAIL;

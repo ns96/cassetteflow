@@ -143,6 +143,11 @@ static esp_err_t handler_uri_info(httpd_req_t *req)
     return ESP_OK;
 }
 
+/**
+ * continuously streams the raw decoded line records to the client.
+ * @param req
+ * @return
+ */
 static esp_err_t handler_uri_raw(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
