@@ -177,3 +177,29 @@ bool tapefile_is_present(const char side)
 
     return true;
 }
+
+/**
+ * Read tapeid from current tape file (if present)
+ * @param side a or b
+ * @param tapeid at least 6 bytes
+ * @return
+ */
+esp_err_t tapefile_read_tapeid(const char side, char *tapeid)
+{
+    FILE *fd = NULL;
+    const char *filepath = tapefile_get_path(side);
+    esp_err_t err = ESP_OK;
+
+    fd = fopen(filepath, "r");
+    if (!fd) {
+        ESP_LOGE(TAG, "Failed to open file : %s", filepath);
+        return ESP_FAIL;
+    }
+
+    if (fscanf(fd, "%5s_", tapeid) != 1) {
+        err = ESP_FAIL;
+    }
+
+    fclose(fd);
+    return err;
+}

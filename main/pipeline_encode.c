@@ -12,6 +12,7 @@
 #include <esp_event.h>
 #include "pipeline_encode.h"
 #include "pipeline.h"
+#include "tapefile.h"
 
 #define PLAYBACK_RATE       48000
 #define PLAYBACK_CHANNEL    2
@@ -22,7 +23,8 @@ static const char *TAG = "cf_pipeline_encode";
 static audio_pipeline_handle_t pipeline = NULL;
 //audio_element_handle_t i2s_stream_writer, mp3_decoder, fatfs_stream_reader, rsp_handle;
 static audio_element_handle_t i2s_stream_writer, minimodem_encoder, fatfs_stream_reader;
-static audio_element_state_t el_state = AEL_STATE_INIT;
+static audio_element_state_t el_state = AEL_STATE_STOPPED;
+static int64_t time_started_us = 0;
 
 esp_err_t pipeline_encode_start(audio_event_iface_handle_t evt, char *url)
 {
@@ -88,6 +90,8 @@ esp_err_t pipeline_encode_start(audio_event_iface_handle_t evt, char *url)
 
     esp_event_post_to(pipeline_event_loop, PIPELINE_EVENTS, PIPELINE_ENCODE_STARTED, NULL, 0, portMAX_DELAY);
 
+    time_started_us = esp_timer_get_time();
+
     return ESP_OK;
 }
 
@@ -117,6 +121,8 @@ bool pipeline_encode_event_loop(audio_event_iface_handle_t evt)
 
     if (encoding_finished) {
         pipeline_encode_stop();
+
+        el_state = AEL_STATE_FINISHED;
     }
 
     return encoding_finished;
@@ -137,15 +143,31 @@ esp_err_t pipeline_encode_stop()
     audio_pipeline_deinit(pipeline);
     pipeline = NULL;
 
-    el_state = AEL_STATE_FINISHED;
+    el_state = AEL_STATE_STOPPED;
 
     return ESP_OK;
 }
 
-void pipeline_encode_status(char *buf, int buf_size)
+void pipeline_encode_status(const char side, char *buf, size_t buf_size)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
-    // TODO use el_state
+
+    switch (el_state) {
+        case AEL_STATE_RUNNING: {
+            int64_t progress_seconds = (esp_timer_get_time() - time_started_us) / 1000000;
+            char tape_id[6] = "?????";
+            tapefile_read_tapeid(side, tape_id);
+            snprintf(buf, buf_size, "ENCODE %s %d", tape_id, (int)progress_seconds);
+        }
+            break;
+        case AEL_STATE_STOPPED:
+        default:
+            snprintf(buf, buf_size, "encoded stopped");
+            break;
+        case AEL_STATE_FINISHED:
+            snprintf(buf, buf_size, "encoded completed");
+            break;
+    }
 }
 
 bool pipeline_encode_is_running(void)

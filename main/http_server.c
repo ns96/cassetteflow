@@ -135,7 +135,7 @@ static esp_err_t handler_uri_info(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
-    char str[255];
+    char str[256];
 
     pipeline_current_info_str(str, sizeof(str));
 

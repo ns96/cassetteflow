@@ -86,25 +86,12 @@ void pipeline_set_mode(enum cf_mode mode)
 
 void pipeline_current_info_str(char *str, size_t str_len)
 {
-    // TODO
-    //generate response string for each mode
     switch (pipeline_mode) {
         case MODE_DECODE:
-            if (pipeline_state == PIPELINE_STOPPED) {
-                strcpy(str, "playback stopped");
-                break;
-            }
-            pipeline_decode_status(str, sizeof(str));
+            // TODO
             break;
         case MODE_ENCODE:
-            if (pipeline_state == PIPELINE_STOPPED) {
-                strcpy(str, "encoded stopped");
-                break;
-            } else if (pipeline_state == PIPELINE_ENCODE_COMPLETED) {
-                strcpy(str, "encoded completed");
-                break;
-            }
-            pipeline_encode_status(str, sizeof(str));
+            pipeline_encode_status(current_encoding_side, str, str_len);
             break;
     }
 }
