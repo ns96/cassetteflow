@@ -221,6 +221,9 @@ static esp_err_t handler_uri_create(httpd_req_t *req)
         case ESP_ERR_INVALID_ARG:
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid request");
             break;
+        case ESP_ERR_NOT_FOUND:
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ID not found in the mp3 database");
+            break;
         case ESP_FAIL:
         default:
             /* Respond with 500 Internal Server Error */

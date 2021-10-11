@@ -9,6 +9,7 @@
 
 #include "tapefile.h"
 #include "internal.h"
+#include "mp3db.h"
 
 static const char *TAG = "cf_tapefile";
 
@@ -84,7 +85,8 @@ const char *tapefile_get_path_tapedb(const char side)
  * @param side a or b (lowercase)
  * @param tape_length_minutes 60, 90, 110, or 120
  * @param data
- * @return ESP_OK, ESP_FAIL if file error, ESP_ERR_INVALID_SIZE - play time does not fit into tape
+ * @return ESP_OK, ESP_FAIL if file error, ESP_ERR_INVALID_SIZE - play time does not fit into tape,
+ *  ESP_ERR_NOT_FOUND - mp3id not found in the DB
  */
 esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, int mute_time)
 {
@@ -128,6 +130,13 @@ esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, 
     }
 
     while ((mp3id != NULL) && (ret == ESP_OK)) {
+        int mp3_length_seconds = 0;
+        if (mp3db_file_for_id(mp3id, NULL, &mp3_length_seconds) != ESP_OK) {
+            // file not found in the DB
+            ret = ESP_ERR_NOT_FOUND;
+            continue;
+        }
+
         // add line records to create a N second muted section before next song
         if (mp3Count >= 1) {
             for (int i = 0; i < mute_time; ++i) {
@@ -142,10 +151,7 @@ esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, 
             continue;
         }
 
-        // TODO get length from mp3db for the mp3id
-        int length_seconds = 10;
-
-        for (int i = 0; i < length_seconds; ++i) {
+        for (int i = 0; i < mp3_length_seconds; ++i) {
             if (format_line(fd, tape_id, mp3Count + 1, mp3id, i, timeTotal) != ESP_OK) {
                 ret = ESP_FAIL;
                 break;
