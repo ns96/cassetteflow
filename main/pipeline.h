@@ -18,6 +18,15 @@ enum
 {
     PIPELINE_ENCODE_STARTED = 0,
     PIPELINE_DECODE_STARTED = 1,
+    PIPELINE_PASSTHROUGH_STARTED = 2,
+};
+
+enum cf_pipeline_decode_mode
+{
+    // play the mp3 file indicated by the data read from the cassette tape
+    PIPELINE_DECODE_MODE_DEFAULT = 0,
+    // output the raw audio data from cassette to the headphone output
+    PIPELINE_DECODE_MODE_PASSTHROUGH = 1,
 };
 
 void pipeline_set_side(const char side);

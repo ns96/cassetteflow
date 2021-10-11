@@ -5,6 +5,7 @@ set(COMPONENT_SRCS
         pipeline.c
         pipeline_encode.c
         pipeline_decode.c
+        pipeline_passthrough.c
         keys.c
         mp3db.c
         tapedb.c
