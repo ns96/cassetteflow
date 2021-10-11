@@ -20,4 +20,7 @@ enum cf_mode
 #define FILE_MP3DB      "/sdcard/mp3db.txt"
 #define FILE_TAPEDB     "/sdcard/tapedb.txt"
 
+// equalizer preset file (CSV format, 10 bands)
+#define FILE_EQ     "/sdcard/eq.txt"
+
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_INTERNAL_H

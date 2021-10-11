@@ -10,6 +10,8 @@ set(COMPONENT_SRCS
         mp3db.c
         tapedb.c
         tapefile.c
+        eq.c
+        led.c
         )
 set(COMPONENT_ADD_INCLUDEDIRS .)
 

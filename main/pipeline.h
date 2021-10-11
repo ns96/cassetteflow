@@ -31,6 +31,7 @@ enum cf_pipeline_decode_mode
 
 void pipeline_set_side(const char side);
 void pipeline_handle_play(void);
+void pipeline_handle_set(void);
 void pipeline_set_mode(enum cf_mode mode);
 void pipeline_current_info_str(char *str, size_t str_len);
 esp_err_t pipeline_start_encoding(char side);

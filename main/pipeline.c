@@ -13,6 +13,8 @@
 #include "pipeline_passthrough.h"
 #include "tapefile.h"
 #include "tapedb.h"
+#include "eq.h"
+#include "led.h"
 
 static const char *TAG = "cf_pipeline";
 
@@ -103,6 +105,43 @@ void pipeline_handle_play(void)
                 }
             }
             break;
+    }
+}
+
+/**
+ * Switch between no EQ or EQ preset read from SD card
+ * Green LED is ON when EQ is active
+ */
+void pipeline_handle_set(void)
+{
+    ESP_LOGI(TAG, "handle SET");
+
+    esp_err_t ret = ESP_OK;
+    const char *filename = FILE_EQ;
+    int bands[10] = {0}; // default EQ (off)
+    static bool eq_active = false;
+
+    eq_active = !eq_active;
+
+    if (eq_active) {
+        // read EQ preset from file
+        ret = eq_read_from_file(filename, bands);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Error reading EQ data from file");
+        }
+    }
+
+    if (ret == ESP_OK) {
+        if (pipeline_decode_set_equalizer(bands) != ESP_OK) {
+            ESP_LOGE(TAG, "Error setting EQ data");
+        } else {
+            // turn on green LED
+            if (eq_active) {
+                led_eq_on();
+            } else {
+                led_eq_off();
+            }
+        }
     }
 }
 

@@ -15,6 +15,7 @@
 #include "keys.h"
 #include "mp3db.h"
 #include "pipeline.h"
+#include "led.h"
 
 static const char *TAG = "cf_main";
 
@@ -43,6 +44,9 @@ void app_main(void)
     ESP_LOGI(TAG, "[1.1] Initialize and start peripherals");
     audio_board_key_init(set);
     audio_board_sdcard_init(set, SD_MODE_1_LINE);
+
+    ESP_LOGI(TAG, "[1.2] Create LED service instance");
+    led_init();
 
     ESP_LOGI(TAG, "[1.3] Scan for new MP3 files on SD card");
     ESP_ERROR_CHECK(mp3db_scan());

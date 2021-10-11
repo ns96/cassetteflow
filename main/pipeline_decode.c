@@ -22,9 +22,13 @@ static const char *TAG = "cf_pipeline_decode";
 static audio_pipeline_handle_t pipeline_for_play = NULL;
 // record audio from line-in, decode with minimodem and output line by line (raw output)
 static audio_pipeline_handle_t pipeline_for_record = NULL;
-static audio_element_handle_t i2s_stream_writer, fatfs_stream_reader, mp3_decoder, equalizer, resample_for_play;
-static audio_element_handle_t i2s_stream_reader, minimodem_decoder, raw_reader;
+static audio_element_handle_t i2s_stream_writer = NULL, fatfs_stream_reader = NULL, mp3_decoder = NULL,
+    equalizer = NULL, resample_for_play = NULL;
+static audio_element_handle_t i2s_stream_reader = NULL, minimodem_decoder, raw_reader = NULL;
 static audio_element_state_t el_state = AEL_STATE_STOPPED;
+// -13 dB is minimum. 0 - no gain.
+// The size of gain array should be the multiplication of NUMBER_BAND and number channels of audio stream data.
+static int equalizer_band_gain[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 static esp_err_t create_playback_pipeline(void)
 {
@@ -58,10 +62,8 @@ static esp_err_t create_playback_pipeline(void)
 
     ESP_LOGI(TAG, "[3] Create equalizer");
     equalizer_cfg_t eq_cfg = DEFAULT_EQUALIZER_CONFIG();
-    int set_gain[] =
-        {-13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13};
-    eq_cfg.set_gain =
-        set_gain; // The size of gain array should be the multiplication of NUMBER_BAND and number channels of audio stream data. The minimum of gain is -13 dB.
+    eq_cfg.channel = 2;
+    eq_cfg.set_gain = equalizer_band_gain;
     equalizer = equalizer_init(&eq_cfg);
 
     ESP_LOGI(TAG, "[5] Register all elements to audio pipeline");
@@ -207,4 +209,27 @@ void pipeline_decode_status(char *buf, size_t buf_size)
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
     //TODO
+}
+
+/**
+ * 10 bands, channels are equal
+ * @return ESP_OK or error
+ */
+esp_err_t pipeline_decode_set_equalizer(int band_gain[10])
+{
+    esp_err_t ret = ESP_OK;
+
+    for (int i = 0; i < 10; ++i) {
+        equalizer_band_gain[i] = band_gain[i];
+        equalizer_band_gain[i + 10] = band_gain[i];
+
+        if (pipeline_for_play != NULL) {
+            ret = equalizer_set_gain_info(equalizer, i, band_gain[i], true);
+            if (ret != ESP_OK) {
+                break;
+            }
+        }
+    }
+
+    return ret;
 }
