@@ -140,9 +140,15 @@ esp_err_t pipeline_decode_event_loop(audio_event_iface_handle_t evt)
     char buff[960] = {0};
     while (1) {
         audio_event_iface_msg_t msg;
+        // TODO a. If no data is being received, then do nothing.
         audio_event_iface_listen(evt, &msg, portMAX_DELAY);
-        // FIXME
+        // TODO b. Once a line of data is processed, then start playback of the indicated MP3 file at the indicated time.
+        //  As more lines of data are read from the cassette, compare the MP3 ID/time to the one currently playing.
+        //  If they match (need to see how accurately this needs to be in sync, but I think within +/- 2 seconds should be fine) continue playing.
         raw_stream_read(raw_reader, buff, 960);
+
+        // TODO c. If the line data MP3 ID/time does not match, then switch to the indicated MP3 file/time and start playing.
+        // TODO d. If no line data is being received i.e. the cassette tape was stopped, then stop playback of the current MP3 and wait for more data.
 
         if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT && msg.source == (void *)mp3_decoder
             && msg.cmd == AEL_MSG_CMD_REPORT_MUSIC_INFO) {
