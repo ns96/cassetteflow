@@ -82,11 +82,11 @@ const char *tapefile_get_path_tapedb(const char side)
  * generates the text file for side A or B to be encoded onto a 60, 90, 110, or 120
  * minute tape
  * @param side a or b (lowercase)
- * @param tape 60, 90, 110, or 120
+ * @param tape_length_minutes 60, 90, 110, or 120
  * @param data
- * @return
+ * @return ESP_OK, ESP_FAIL if file error, ESP_ERR_INVALID_SIZE - play time does not fit into tape
  */
-esp_err_t tapefile_create(const char side, const char *tape, char *data, int mute_time)
+esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, int mute_time)
 {
     char *mp3id;
     char tape_id[32];
@@ -96,6 +96,7 @@ esp_err_t tapefile_create(const char side, const char *tape, char *data, int mut
     // this file will be used to when adding to the tape DB
     FILE *fd_tapedb = NULL;
     const char *filepath = tapefile_get_path(side);
+    esp_err_t ret = ESP_OK;
 
     ESP_LOGI(TAG, "Creating text file for side:%c", side);
 
@@ -126,15 +127,19 @@ esp_err_t tapefile_create(const char side, const char *tape, char *data, int mut
         fputc('\t', fd_tapedb);
     }
 
-    while (mp3id != NULL) {
+    while ((mp3id != NULL) && (ret == ESP_OK)) {
         // add line records to create a N second muted section before next song
         if (mp3Count >= 1) {
             for (int i = 0; i < mute_time; ++i) {
                 timeTotal += 1;
                 if (format_line_mute(fd, tape_id, mp3Count + 1, mp3id, timeTotal) != ESP_OK) {
-                    // TODO error
+                    ret = ESP_FAIL;
+                    break;
                 }
             }
+        }
+        if (ret != ESP_OK) {
+            continue;
         }
 
         // TODO get length from mp3db for the mp3id
@@ -142,9 +147,13 @@ esp_err_t tapefile_create(const char side, const char *tape, char *data, int mut
 
         for (int i = 0; i < length_seconds; ++i) {
             if (format_line(fd, tape_id, mp3Count + 1, mp3id, i, timeTotal) != ESP_OK) {
-                // TODO error
+                ret = ESP_FAIL;
+                break;
             }
             timeTotal += 1;
+        }
+        if (ret != ESP_OK) {
+            continue;
         }
 
         // add to the tapeDB file
@@ -155,6 +164,14 @@ esp_err_t tapefile_create(const char side, const char *tape, char *data, int mut
         mp3id = strtok(NULL, ",");
     }
 
+    if (ret == ESP_OK) {
+        // check total play time to fit into the tape
+        int tape_side_duration_seconds = tape_length_minutes * 60 / 2;
+        if (timeTotal > tape_side_duration_seconds) {
+            ret = ESP_ERR_INVALID_SIZE;
+        }
+    }
+
     fputc('\n', fd_tapedb);
 
     fclose(fd);
@@ -162,7 +179,7 @@ esp_err_t tapefile_create(const char side, const char *tape, char *data, int mut
 
     ESP_LOGI(TAG, "File creation complete");
 
-    return ESP_OK;
+    return ret;
 }
 
 bool tapefile_is_present(const char side)

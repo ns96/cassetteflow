@@ -165,7 +165,7 @@ static esp_err_t handler_uri_create(httpd_req_t *req)
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
     size_t buf_len;
-    esp_err_t err = ESP_FAIL;
+    esp_err_t err = ESP_ERR_INVALID_ARG;
     char param_side[8] = "a";
     char param_tape[128] = "60";
     char param_mute[128] = "0";
@@ -200,20 +200,31 @@ static esp_err_t handler_uri_create(httpd_req_t *req)
         free(buf);
     }
 
-    if ((strlen(param_side) == 1) && (strlen(param_tape) >= 2)
+    if ((strlen(param_side) == 1) && (strlen(param_tape) > 0)
         && (param_data != NULL) && (strlen(param_data) > 0)
         && (strlen(param_mute) > 0)) {
+        int tape_length_minutes = atoi(param_tape);
         int mute_seconds = atoi(param_mute);
-        err = tapefile_create(param_side[0], param_tape, param_data, mute_seconds);
+        err = tapefile_create(param_side[0], tape_length_minutes, param_data, mute_seconds);
     }
     free(param_data);
 
-    if (err == ESP_OK) {
-        /* Respond with empty body */
-        httpd_resp_send(req, NULL, 0);
-    } else {
-        /* Respond with 500 Internal Server Error */
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to create txt file");
+    switch (err) {
+        case ESP_OK:
+            /* Respond with empty body */
+            httpd_resp_send(req, NULL, 0);
+            break;
+        case ESP_ERR_INVALID_SIZE:
+            /* Respond with warning message */
+            httpd_resp_sendstr(req, "Playback time of the mp3 files would exceed the length of the tape side");
+            break;
+        case ESP_ERR_INVALID_ARG:
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid request");
+            break;
+        case ESP_FAIL:
+        default:
+            /* Respond with 500 Internal Server Error */
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to create txt file");
     }
     return ESP_OK;
 }
