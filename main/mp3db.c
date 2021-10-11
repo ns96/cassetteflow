@@ -108,7 +108,8 @@ static bool mp3db_file_exists(const char *filepath)
  * Get file info from the DB
  * @param mp3id input mp3id (10 characters hash)
  * @param filepath output full path with filename (/sdcard/file.mp3) (at least SDCARD_FILE_PREV_NAME-1 bytes)
- * @param duration output duration in seconds
+ *  (can be NULL)
+ * @param duration output duration in seconds (can be NULL)
  * @return true if file is already in the db
  */
 esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration)
@@ -117,6 +118,7 @@ esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration)
     char line_mp3id[11];
     char *line_file;
     int line_duration = 0;
+    esp_err_t ret = ESP_FAIL;
 
     line_file = malloc(MP3DB_MAX_LINE_LENGTH);
     if (line_file == NULL) {
@@ -134,8 +136,13 @@ esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration)
     while (fscanf(fd_db, "%10s\t%d\t%1024[^\n]\n", line_mp3id, &line_duration, line_file) == 3) {
         if (strcmp(mp3id, line_mp3id) == 0) {
             // file present in the DB
-            strcpy(filepath, line_file);
-            *duration = line_duration;
+            if (filepath != NULL) {
+                strcpy(filepath, line_file);
+            }
+            if (duration != NULL) {
+                *duration = line_duration;
+            }
+            ret = ESP_OK;
             break;
         }
     }
@@ -143,7 +150,7 @@ esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration)
     free(line_file);
     fclose(fd_db);
 
-    return ESP_OK;
+    return ret;
 }
 
 static void mp3db_sdcard_url_save_cb(void *user_data, char *url)
