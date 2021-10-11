@@ -23,10 +23,10 @@
       <rules>
         <rule entity="MACRO" visibility="ANY" specifier="ANY" prefix="" style="SCREAMING_SNAKE_CASE" suffix="" />
         <rule entity="NAMESPACE" visibility="ANY" specifier="ANY" prefix="" style="SNAKE_CASE" suffix="" />
-        <rule entity="CLASS,ENUM,UNION,TYPEDEF" visibility="ANY" specifier="ANY" prefix="" style="PASCAL_CASE" suffix="" />
-        <rule entity="GLOBAL_FUNCTION,CLASS_MEMBER_FUNCTION,STRUCT_MEMBER_FUNCTION" visibility="ANY" specifier="ANY" prefix="" style="CAMEL_CASE" suffix="" />
+        <rule entity="CLASS,ENUM,UNION,TYPEDEF" visibility="ANY" specifier="ANY" prefix="" style="SNAKE_CASE" suffix="" />
+        <rule entity="GLOBAL_FUNCTION,CLASS_MEMBER_FUNCTION,STRUCT_MEMBER_FUNCTION" visibility="ANY" specifier="ANY" prefix="" style="SNAKE_CASE" suffix="" />
         <rule entity="ENUMERATOR" visibility="ANY" specifier="ANY" prefix="" style="SCREAMING_SNAKE_CASE" suffix="" />
-        <rule entity="GLOBAL_VARIABLE,PARAMETER,LOCAL_VARIABLE" visibility="ANY" specifier="ANY" prefix="" style="PASCAL_CASE" suffix="" />
+        <rule entity="GLOBAL_VARIABLE,PARAMETER,LOCAL_VARIABLE" visibility="ANY" specifier="ANY" prefix="" style="SNAKE_CASE" suffix="" />
       </rules>
     </Objective-C-extensions>
     <codeStyleSettings language="ObjectiveC">
