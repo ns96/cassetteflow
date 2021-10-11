@@ -196,7 +196,7 @@ esp_err_t pipeline_decode_stop(void)
     return ESP_OK;
 }
 
-void pipeline_decode_status(char *buf, int buf_size)
+void pipeline_decode_status(char *buf, size_t buf_size)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 

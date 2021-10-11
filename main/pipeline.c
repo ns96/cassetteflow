@@ -57,7 +57,8 @@ void pipeline_handle_play(void)
 
     switch (pipeline_mode) {
         case MODE_DECODE:
-            // TODO
+            // TODO switch between playing the mp3 file indicated by the data read from the cassette tape (default),
+            //  or outputting the raw audio data from cassette to the headphone output
             break;
         case MODE_ENCODE:
             if (pipeline_encode_is_running()) {
@@ -76,12 +77,18 @@ void pipeline_set_mode(enum cf_mode mode)
 {
     ESP_LOGI(TAG, "set_mode: %d", mode);
 
+    if (mode == pipeline_mode) {
+        ESP_LOGI(TAG, "already in mode: %d", mode);
+        return;
+    }
+
     //stop current mode
     if (pipeline_mode == MODE_DECODE) {
         pipeline_decode_stop();
     } else {
         pipeline_encode_stop();
-        // TODO start MODE_DECODE
+        // start MODE_DECODE
+        pipeline_decode_start(evt);
     }
 
     pipeline_mode = mode;
@@ -91,7 +98,7 @@ void pipeline_current_info_str(char *str, size_t str_len)
 {
     switch (pipeline_mode) {
         case MODE_DECODE:
-            // TODO
+            pipeline_decode_status(str, str_len);
             break;
         case MODE_ENCODE:
             pipeline_encode_status(current_encoding_side, str, str_len);
@@ -152,6 +159,9 @@ esp_err_t pipeline_init(audio_event_iface_handle_t event_handle)
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register_with(pipeline_event_loop, PIPELINE_EVENTS,
                                                              PIPELINE_ENCODE_STARTED, pipeline_event_handler,
+                                                             NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(pipeline_event_loop, PIPELINE_EVENTS,
+                                                             PIPELINE_DECODE_STARTED, pipeline_event_handler,
                                                              NULL, NULL));
 
     if (pipeline_mode == MODE_DECODE) {

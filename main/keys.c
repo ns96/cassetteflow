@@ -37,7 +37,9 @@ static esp_err_t input_key_service_cb(periph_service_handle_t handle, periph_ser
                 break;
             case INPUT_KEY_USER_ID_SET:
                 ESP_LOGI(TAG, "[ * ] [Set] input key event");
-                // TODO
+                // TODO Will switch between no EQ or various EQ presets TBD.
+                //  Can use the green LED to indicate when the EQ is active.
+                //  Those settings should be stored on file in the SDCard so they can be edited without recompiling the firmware.
                 break;
             case INPUT_KEY_USER_ID_VOLUP:
                 ESP_LOGI(TAG, "[ * ] [Vol+] input key event");
