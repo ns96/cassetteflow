@@ -7,6 +7,7 @@
 #include "esp_netif.h"
 #include "pipeline.h"
 #include "tapefile.h"
+#include "raw_queue.h"
 #include <esp_http_server.h>
 
 static const char *TAG = "cf_http_server";
@@ -152,9 +153,24 @@ static esp_err_t handler_uri_raw(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
-    // TODO
-    /* Respond with empty body */
-    httpd_resp_send(req, NULL, 0);
+    esp_err_t ret = ESP_OK;
+
+    httpd_resp_set_type(req, "text/plain");
+
+    raw_queue_reset();
+
+    while (ret == ESP_OK) {
+        // read current line (up to 10 seconds)
+        raw_queue_message_t msg;
+        ret = raw_queue_get(&msg, 10 * 1000);
+        if (ret == ESP_OK) {
+            // send one line at a time
+            ret = httpd_resp_send_chunk(req, msg.line, HTTPD_RESP_USE_STRLEN);
+        }
+    }
+
+    /* End of transmission */
+    httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
 

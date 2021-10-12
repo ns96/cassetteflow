@@ -16,6 +16,7 @@
 #include "mp3db.h"
 #include "pipeline.h"
 #include "led.h"
+#include "raw_queue.h"
 
 static const char *TAG = "cf_main";
 
@@ -58,6 +59,9 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[ 3 ] Connect to the network");
     ESP_ERROR_CHECK(network_connect());
+
+    ESP_LOGI(TAG, "[3.1] Create raw queue");
+    ESP_ERROR_CHECK(raw_queue_init());
 
     ESP_LOGI(TAG, "[ 4 ] Create and start HTTP server");
     ESP_ERROR_CHECK(http_server_start());

@@ -1,6 +1,7 @@
 set(COMPONENT_SRCS
         main.c
         http_server.c
+        raw_queue.c
         network.c
         pipeline.c
         pipeline_encode.c
