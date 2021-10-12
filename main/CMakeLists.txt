@@ -13,6 +13,7 @@ set(COMPONENT_SRCS
         tapefile.c
         eq.c
         led.c
+        mp3info.c
         )
 set(COMPONENT_ADD_INCLUDEDIRS .)
 

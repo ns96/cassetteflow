@@ -10,6 +10,7 @@
 #include <string.h>
 #include "mp3db.h"
 #include "internal.h"
+#include "mp3info.h"
 
 #define SDCARD_FILE_PREV_NAME           "file:/"
 
@@ -55,7 +56,7 @@ static esp_err_t mp3db_file_save(const char *filepath)
         return ESP_FAIL;
     }
 
-    int duration = 10;  // FIXME
+    int duration = mp3info_get_duration(filepath);
     const char *filename = filepath + strlen("/sdcard/");
     char mp3id[11];
     mp3db_filename_to_id10c(filename, mp3id);
