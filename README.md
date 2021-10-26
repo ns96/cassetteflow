@@ -10,10 +10,12 @@
 1. Open main/config.h
 2. Set CONFIG_WIFI_SSID and CONFIG_WIFI_PASSWORD to your Wi-Fi AP
 
-## Develop/Build project
+## Develop/Build/Flash project
 
 1. Open terminal in the project's folder and run to set ESP-IDF environment variables: `. $HOME/esp/esp-idf/export.sh`
 2. Build project: `idf.py build`
+3. Enter upload mode: Manually by pressing both Boot and RST keys and then releasing first RST and then Boot key.
+4. Flash project: `idf.py flash`
 
 ## Develop/Build project in CLion
 
