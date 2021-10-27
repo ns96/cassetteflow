@@ -192,6 +192,11 @@ esp_err_t pipeline_start_encoding(const char side)
 
     snprintf(file_uri, sizeof(file_uri), "file:/%s", tapefile_get_path(side));
 
+    // switch to ENCODE mode if needed
+    if (pipeline_mode != MODE_ENCODE) {
+        pipeline_set_mode(MODE_ENCODE);
+    }
+
     if (pipeline_mode == MODE_ENCODE) {
         return pipeline_encode_start(evt, file_uri);
     } else {
