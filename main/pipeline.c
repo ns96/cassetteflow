@@ -50,6 +50,8 @@ static void pipeline_event_handler(void *handler_args, esp_event_base_t base, in
 
 static void pipeline_start_decoding(void)
 {
+// FIXME enable decode mode
+#if 0
     switch (pipeline_decode_mode) {
         case PIPELINE_DECODE_MODE_DEFAULT:
             pipeline_decode_start(evt);
@@ -58,10 +60,13 @@ static void pipeline_start_decoding(void)
             pipeline_passthrough_start(evt);
             break;
     }
+#endif
 }
 
 static void pipeline_stop_decoding(void)
 {
+// FIXME enable decode mode
+#if 0
     switch (pipeline_decode_mode) {
         case PIPELINE_DECODE_MODE_DEFAULT:
             pipeline_decode_stop();
@@ -70,6 +75,7 @@ static void pipeline_stop_decoding(void)
             pipeline_passthrough_stop();
             break;
     }
+#endif
 }
 
 void pipeline_set_side(const char side)
