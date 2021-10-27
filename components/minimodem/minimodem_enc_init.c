@@ -178,7 +178,7 @@ minimodem_struct minimodem_transmit_cfg(void) {
 	 callerid       Bell202 CID 1200 bps
 	 uic{-train,-ground}       UIC-751-3 Train/Ground 600 bps
 	 */
-	modem_mode = "5000";
+	modem_mode = "1200";
 
 	/*
 	 -R, --samplerate {rate}
@@ -188,7 +188,7 @@ minimodem_struct minimodem_transmit_cfg(void) {
 	sample_rate = 60000;
 
     /////////////////////////////////////////////////////////////////
-	// Use "minimodem 5000 -r" on PC to decode this
+    // Use "minimodem 1200 -r" on PC to decode this
     /////////////////////////////////////////////////////////////////
 
 	minimodem_struct mm = { .sample_rate = 0 }; // return this if error
