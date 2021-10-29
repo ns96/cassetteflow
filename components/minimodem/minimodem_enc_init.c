@@ -185,7 +185,7 @@ minimodem_struct minimodem_transmit_cfg(void) {
 	*/
 	// if  i2s_cfg.i2s_config.sample_rate = 48000;
 	// then REAL sample rate = 48000*1.25 = 60000
-	sample_rate = 60000;
+	sample_rate = 48000;
 
     /////////////////////////////////////////////////////////////////
     // Use "minimodem 1200 -r" on PC to decode this
