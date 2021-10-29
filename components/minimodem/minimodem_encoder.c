@@ -45,12 +45,8 @@ static audio_element_err_t _minimodem_encoder_process(audio_element_handle_t sel
     int r_size = audio_element_input(self, in_buffer, wanted_size);
     int out_len = r_size;
     if (r_size == wanted_size) {
-        // replace LF with 0 (string end)
-        in_buffer[wanted_size - 1] = 0;
-
-        ESP_LOGI(TAG, "process: %s", in_buffer);
-
-        out_len = fsk_transmit_buf(&minimodem_enc->minimodem_str, self, in_buffer, wanted_size - 1);
+        ESP_LOGI(TAG, "process: %29s", in_buffer);
+        out_len = fsk_transmit_buf(&minimodem_enc->minimodem_str, self, in_buffer, wanted_size);
         //audio_element_update_byte_pos(self, nbytes);
         //out_len = audio_element_output(self, in_buffer, r_size);
         if (out_len > 0) {
