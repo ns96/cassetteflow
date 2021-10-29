@@ -7,6 +7,9 @@
 
 #include <esp_err.h>
 
+// excluding line end character(s)
+#define TAPEFILE_LINE_LENGTH        (29)
+
 const char *tapefile_get_path(const char side);
 const char *tapefile_get_path_tapedb(const char side);
 esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, int mute_time);

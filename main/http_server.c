@@ -221,7 +221,8 @@ static esp_err_t handler_uri_create(httpd_req_t *req)
         && (strlen(param_mute) > 0)) {
         int tape_length_minutes = atoi(param_tape);
         int mute_seconds = atoi(param_mute);
-        err = tapefile_create(param_side[0], tape_length_minutes, param_data, mute_seconds);
+        const char side = param_side[0];
+        err = tapefile_create(toupper(side), tape_length_minutes, param_data, mute_seconds);
     }
     free(param_data);
 

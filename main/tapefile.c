@@ -15,10 +15,15 @@ static const char *TAG = "cf_tapefile";
 
 static const int replicate = 4;
 
-static esp_err_t format_line(FILE *file, const char *tape_id, int track_num,
-                             const char *mp3_id, int playtime, int playtime_total)
+static esp_err_t format_line(FILE *file,
+                             const char *tape_id,
+                             const char side,
+                             int track_num,
+                             const char *mp3_id,
+                             int playtime,
+                             int playtime_total)
 {
-    //1. 5 digit Tape ID
+    //1. 4 digit Tape ID + 1 letter side 'A' or 'B'
     //2. 2 digit track number
     //3. Auto generate 10 digit MP3 ID associated with a MP3 file, or http url [future addition]
     //4. 4 digit number indicating desired playtime (in seconds) of the MP3. A value of “000M”
@@ -26,7 +31,8 @@ static esp_err_t format_line(FILE *file, const char *tape_id, int track_num,
     //each mp3 file.
     //5. 4 digit number indicating the total number of seconds played so far on tape.
     for (int i = 0; i < replicate; ++i) {
-        int written = fprintf(file, "%5s_%02d_%10s_%04d_%04d\n", tape_id, track_num, mp3_id, playtime, playtime_total);
+        int written = fprintf(file, "%4s%c_%02d_%10s_%04d_%04d\n",
+                              tape_id, side, track_num, mp3_id, playtime, playtime_total);
         if (written <= 0) {
             return ESP_FAIL;
         }
@@ -34,10 +40,14 @@ static esp_err_t format_line(FILE *file, const char *tape_id, int track_num,
     return ESP_OK;
 }
 
-static esp_err_t format_line_mute(FILE *file, const char *tape_id, int track_num,
-                                  const char *mp3_id, int playtime_total)
+static esp_err_t format_line_mute(FILE *file,
+                                  const char *tape_id,
+                                  const char side,
+                                  int track_num,
+                                  const char *mp3_id,
+                                  int playtime_total)
 {
-    //1. 5 digit Tape ID
+    //1. 4 digit Tape ID + 1 letter side 'A' or 'B'
     //2. 2 digit track number
     //3. Auto generate 10 digit MP3 ID associated with a MP3 file, or http url [future addition]
     //4. 4 digit number indicating desired playtime (in seconds) of the MP3. A value of “000M”
@@ -45,7 +55,8 @@ static esp_err_t format_line_mute(FILE *file, const char *tape_id, int track_num
     //each mp3 file.
     //5. 4 digit number indicating the total number of seconds played so far on tape.
     for (int i = 0; i < replicate; ++i) {
-        int written = fprintf(file, "%5s_%02d_%10s_000M_%04d\n", tape_id, track_num, mp3_id, playtime_total);
+        int written = fprintf(file, "%4s%c_%02d_%10s_000M_%04d\n",
+                              tape_id, side, track_num, mp3_id, playtime_total);
         if (written <= 0) {
             return ESP_FAIL;
         }
@@ -91,7 +102,7 @@ const char *tapefile_get_path_tapedb(const char side)
 esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, int mute_time)
 {
     char *mp3id;
-    char tape_id[32];
+    char tape_id[TAPEFILE_LINE_LENGTH + 1];
     int mp3Count = 0;
     int timeTotal = 0;
     FILE *fd = NULL;
@@ -141,7 +152,7 @@ esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, 
         if (mp3Count >= 1) {
             for (int i = 0; i < mute_time; ++i) {
                 timeTotal += 1;
-                if (format_line_mute(fd, tape_id, mp3Count + 1, mp3id, timeTotal) != ESP_OK) {
+                if (format_line_mute(fd, tape_id, side, mp3Count + 1, mp3id, timeTotal) != ESP_OK) {
                     ret = ESP_FAIL;
                     break;
                 }
@@ -152,7 +163,7 @@ esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, 
         }
 
         for (int i = 0; i < mp3_length_seconds; ++i) {
-            if (format_line(fd, tape_id, mp3Count + 1, mp3id, i, timeTotal) != ESP_OK) {
+            if (format_line(fd, tape_id, side, mp3Count + 1, mp3id, i, timeTotal) != ESP_OK) {
                 ret = ESP_FAIL;
                 break;
             }
