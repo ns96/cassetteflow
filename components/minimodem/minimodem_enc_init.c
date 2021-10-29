@@ -58,28 +58,42 @@ static size_t fsk_transmit_frame(unsigned int bits, unsigned int n_data_bits,
 		size_t bit_nsamples, float bfsk_mark_f, float bfsk_space_f,
 		float bfsk_nstartbits, float bfsk_nstopbits, int invert_start_stop,
 		int bfsk_msb_first, audio_element_handle_t self, size_t sample_rate) {
-	int i;
-	size_t out_len = 0;
-	if (bfsk_nstartbits > 0)
-		out_len += simpleaudio_tone(
-				invert_start_stop ? bfsk_mark_f : bfsk_space_f,
-				bit_nsamples * bfsk_nstartbits, self, sample_rate);	// start
-	for (i = 0; i < n_data_bits; i++) {				// data
-		unsigned int bit;
-		if (bfsk_msb_first) {
-			bit = (bits >> (n_data_bits - i - 1)) & 1;
-		} else {
-			bit = (bits >> i) & 1;
-		}
+    int i;
+    size_t out_len = 0;
+    if (bfsk_nstartbits > 0) {
+        size_t audio_len = simpleaudio_tone(
+            invert_start_stop ? bfsk_mark_f : bfsk_space_f,
+            bit_nsamples * bfsk_nstartbits, self, sample_rate);    // start
+        if (audio_len == 0) {
+            return 0;
+        }
+        out_len += audio_len;
+    }
+    for (i = 0; i < n_data_bits; i++) {                // data
+        unsigned int bit;
+        if (bfsk_msb_first) {
+            bit = (bits >> (n_data_bits - i - 1)) & 1;
+        } else {
+            bit = (bits >> i) & 1;
+        }
 
-		float tone_freq = bit == 1 ? bfsk_mark_f : bfsk_space_f;
-		out_len += simpleaudio_tone(tone_freq, bit_nsamples, self, sample_rate);
-	}
-	if (bfsk_nstopbits > 0)
-		out_len += simpleaudio_tone(
-				invert_start_stop ? bfsk_space_f : bfsk_mark_f,
-				bit_nsamples * bfsk_nstopbits, self, sample_rate);		// stop
-	return out_len;
+        float tone_freq = bit == 1 ? bfsk_mark_f : bfsk_space_f;
+        size_t audio_len = simpleaudio_tone(tone_freq, bit_nsamples, self, sample_rate);
+        if (audio_len == 0) {
+            return 0;
+        }
+        out_len += audio_len;
+    }
+    if (bfsk_nstopbits > 0) {
+        size_t audio_len = simpleaudio_tone(
+            invert_start_stop ? bfsk_space_f : bfsk_mark_f,
+            bit_nsamples * bfsk_nstopbits, self, sample_rate);        // stop
+        if (audio_len == 0) {
+            return 0;
+        }
+        out_len += audio_len;
+    }
+    return out_len;
 }
 
 
@@ -97,30 +111,45 @@ static size_t fsk_transmit_char(minimodem_struct s, audio_element_handle_t self,
 		nwords = s.encode(bits, buf);
 
 		if (!tx_transmitting) {
-			tx_transmitting = 1;
-			/* emit leader tone (mark) */
-			for (j = 0; j < s.tx_leader_bits_len; j++)
-				out_len += simpleaudio_tone(
-						s.invert_start_stop ? s.bfsk_space_f : s.bfsk_mark_f,
-						bit_nsamples, self, s.sample_rate);
-		}
+            tx_transmitting = 1;
+            /* emit leader tone (mark) */
+            for (j = 0; j < s.tx_leader_bits_len; j++) {
+                size_t audio_len = simpleaudio_tone(
+                    s.invert_start_stop ? s.bfsk_space_f : s.bfsk_mark_f,
+                    bit_nsamples, self, s.sample_rate);
+                if (audio_len == 0) {
+                    return 0;
+                }
+                out_len += audio_len;
+            }
+        }
 		if (tx_transmitting < 2) {
-			tx_transmitting = 2;
-			/* emit "preamble" of sync bytes */
-			for (j = 0; j < s.bfsk_do_tx_sync_bytes; j++)
-				out_len += fsk_transmit_frame(s.bfsk_sync_byte, s.n_data_bits,
-						bit_nsamples, s.bfsk_mark_f, s.bfsk_space_f,
-						s.bfsk_nstartbits, s.bfsk_nstopbits,
-						s.invert_start_stop, 0, self, s.sample_rate);
-		}
+            tx_transmitting = 2;
+            /* emit "preamble" of sync bytes */
+            for (j = 0; j < s.bfsk_do_tx_sync_bytes; j++) {
+                size_t audio_len = fsk_transmit_frame(s.bfsk_sync_byte, s.n_data_bits,
+                                                      bit_nsamples, s.bfsk_mark_f, s.bfsk_space_f,
+                                                      s.bfsk_nstartbits, s.bfsk_nstopbits,
+                                                      s.invert_start_stop, 0, self, s.sample_rate);
+                if (audio_len == 0) {
+                    return 0;
+                }
+                out_len += audio_len;
+            }
+        }
 
-		/* emit data bits */
-		for (j = 0; j < nwords; j++)
-			out_len += fsk_transmit_frame(bits[j], s.n_data_bits, bit_nsamples,
-					s.bfsk_mark_f, s.bfsk_space_f, s.bfsk_nstartbits,
-					s.bfsk_nstopbits, s.invert_start_stop, s.bfsk_msb_first,
-					self, s.sample_rate);
-	}
+        /* emit data bits */
+        for (j = 0; j < nwords; j++) {
+            size_t audio_len = fsk_transmit_frame(bits[j], s.n_data_bits, bit_nsamples,
+                                                  s.bfsk_mark_f, s.bfsk_space_f, s.bfsk_nstartbits,
+                                                  s.bfsk_nstopbits, s.invert_start_stop, s.bfsk_msb_first,
+                                                  self, s.sample_rate);
+            if (audio_len == 0) {
+                return 0;
+            }
+            out_len += audio_len;
+        }
+    }
 	return out_len;
 }
 
@@ -128,8 +157,12 @@ size_t fsk_transmit_buf(minimodem_struct s, audio_element_handle_t self,
 		unsigned char *buf, size_t len) {
 	size_t out_len = 0;
 	for (size_t i = 0; i < len; i++) {
-		out_len += fsk_transmit_char(s, self, buf[i]);
-	}
+        size_t audio_len = fsk_transmit_char(s, self, buf[i]);
+        if (audio_len == 0) {
+            return 0;
+        }
+        out_len += audio_len;
+    }
 	return out_len;
 }
 

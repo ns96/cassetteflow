@@ -145,7 +145,7 @@ static size_t esp32_write(void *buf, size_t nframes, audio_element_handle_t self
     size_t nbytes = nframes * framesize * 2; // * 2 because stereo
     if (audio_element_output(self, (char *)buf, nbytes) != nbytes) {
         fprintf(stderr, "esp32_write error!\n");
-        return -1;
+        return 0;
     }
     //audio_element_update_byte_pos(self, nbytes);
     return nbytes;
