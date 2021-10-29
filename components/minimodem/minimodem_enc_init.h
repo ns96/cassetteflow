@@ -29,14 +29,13 @@ typedef struct
 
 size_t fsk_transmit_buf
 (
-	minimodem_struct s, 
-	audio_element_handle_t self,
-	unsigned char *buf,
-	size_t len
+    minimodem_struct *s,
+    audio_element_handle_t self,
+    char *buf,
+    size_t len
 );
 
-minimodem_struct
-minimodem_transmit_cfg(void);
+minimodem_struct minimodem_transmit_cfg(void);
 
 #ifdef __cplusplus
 }

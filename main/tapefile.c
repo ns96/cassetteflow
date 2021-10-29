@@ -13,7 +13,7 @@
 
 static const char *TAG = "cf_tapefile";
 
-static const int replicate = 4;
+static const int replicate = 1;
 
 static esp_err_t format_line(FILE *file,
                              const char *tape_id,
@@ -45,6 +45,7 @@ static esp_err_t format_line_mute(FILE *file,
                                   const char side,
                                   int track_num,
                                   const char *mp3_id,
+                                  const int mute_seconds,
                                   int playtime_total)
 {
     //1. 4 digit Tape ID + 1 letter side 'A' or 'B'
@@ -55,8 +56,8 @@ static esp_err_t format_line_mute(FILE *file,
     //each mp3 file.
     //5. 4 digit number indicating the total number of seconds played so far on tape.
     for (int i = 0; i < replicate; ++i) {
-        int written = fprintf(file, "%4s%c_%02d_%10s_000M_%04d\n",
-                              tape_id, side, track_num, mp3_id, playtime_total);
+        int written = fprintf(file, "%4s%c_%02d_%10s_%03dM_%04d\n",
+                              tape_id, side, track_num, mp3_id, mute_seconds, playtime_total);
         if (written <= 0) {
             return ESP_FAIL;
         }
@@ -96,6 +97,7 @@ const char *tapefile_get_path_tapedb(const char side)
  * @param side a or b (lowercase)
  * @param tape_length_minutes 60, 90, 110, or 120
  * @param data
+ * @param mute_time mute time between tracks in seconds
  * @return ESP_OK, ESP_FAIL if file error, ESP_ERR_INVALID_SIZE - play time does not fit into tape,
  *  ESP_ERR_NOT_FOUND - mp3id not found in the DB
  */
@@ -150,16 +152,11 @@ esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, 
 
         // add line records to create a N second muted section before next song
         if (mp3Count >= 1) {
-            for (int i = 0; i < mute_time; ++i) {
-                timeTotal += 1;
-                if (format_line_mute(fd, tape_id, side, mp3Count + 1, mp3id, timeTotal) != ESP_OK) {
-                    ret = ESP_FAIL;
-                    break;
-                }
+            if (format_line_mute(fd, tape_id, side, mp3Count + 1, mp3id, mute_time, timeTotal) != ESP_OK) {
+                ret = ESP_FAIL;
+                break;
             }
-        }
-        if (ret != ESP_OK) {
-            continue;
+            timeTotal += mute_time;
         }
 
         for (int i = 0; i < mp3_length_seconds; ++i) {

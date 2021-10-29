@@ -2,8 +2,10 @@
 #include "esp_log.h"
 #include "audio_mem.h"
 #include "audio_element.h"
-#include "minimodem_encoder.h"
 #include "audio_error.h"
+
+#include "minimodem_encoder.h"
+#include "minimodem_config.h"
 
 static const char *TAG = "MINIMODEM_ENCODER";
 
@@ -34,18 +36,29 @@ static esp_err_t _minimodem_encoder_close(audio_element_handle_t self)
     return ESP_OK;
 }
 
-static int _minimodem_encoder_process(audio_element_handle_t self, char *in_buffer, int in_len)
+static audio_element_err_t _minimodem_encoder_process(audio_element_handle_t self, char *in_buffer, int in_len)
 {
     minimodem_encoder_t *minimodem_enc = (minimodem_encoder_t *)audio_element_getdata(self);
-    int r_size = audio_element_input(self, in_buffer, in_len);
+
+    // consume input data line by line
+    const int wanted_size = TAPEFILE_LINE_LENGTH + 1; // +1 line end character
+    int r_size = audio_element_input(self, in_buffer, wanted_size);
     int out_len = r_size;
-    if (r_size > 0) {
-        out_len = fsk_transmit_buf(minimodem_enc->minimodem_str, self, (unsigned char *)in_buffer, in_len);
+    if (r_size == wanted_size) {
+        // replace LF with 0 (string end)
+        in_buffer[wanted_size - 1] = 0;
+
+        ESP_LOGI(TAG, "process: %s", in_buffer);
+
+        out_len = fsk_transmit_buf(&minimodem_enc->minimodem_str, self, in_buffer, wanted_size - 1);
         //audio_element_update_byte_pos(self, nbytes);
         //out_len = audio_element_output(self, in_buffer, r_size);
         if (out_len > 0) {
             audio_element_update_byte_pos(self, out_len);
         }
+    } else if (r_size > 0) {
+        ESP_LOGW(TAG, "process: not enough data %d", r_size);
+        out_len = AEL_IO_FAIL;
     }
 
     return out_len;
