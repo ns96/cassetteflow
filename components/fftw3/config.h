@@ -64,6 +64,7 @@
 
 /* Define to compile in single precision. */
 /* #undef FFTW_SINGLE */
+#define FFTW_SINGLE 1
 
 /* Define to 1 if you have the `abort' function. */
 #define HAVE_ABORT 1
