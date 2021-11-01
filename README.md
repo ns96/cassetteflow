@@ -24,6 +24,11 @@
 3. Edit/update
 4. Build project: `idf.py build`
 
+## Minimodem test commands
+
+1. Encode: `minimodem --tx 1200 -f wavfile.wav`
+2. Decode: `minimodem -r 1200`
+
 ## Setup CLion
 
 1. https://www.jetbrains.com/help/clion/esp-idf.html#cmake-setup
