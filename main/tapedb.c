@@ -67,7 +67,7 @@ bool tapedb_tape_exists(const char *tape)
     }
 
     // read DB line by line (only tape ids)
-    while (fscanf(fd_db, "%5s\t%*[^\n]\n", line_tape_id) == 1) {
+    while (fscanf(fd_db, "%4s\t%*[^\n]\n", line_tape_id) == 1) {
         if (strcmp(tape, line_tape_id) == 0) {
             // file present in the DB
             found = true;

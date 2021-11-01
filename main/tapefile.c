@@ -225,7 +225,7 @@ esp_err_t tapefile_read_tapeid(const char side, char *tapeid)
         return ESP_FAIL;
     }
 
-    if (fscanf(fd, "%5s_", tapeid) != 1) {
+    if (fscanf(fd, "%4s[AB]_", tapeid) != 1) {
         err = ESP_FAIL;
     }
 
