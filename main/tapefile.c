@@ -186,8 +186,6 @@ esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, 
         }
     }
 
-    fputc('\n', fd_tapedb);
-
     fclose(fd);
     fclose(fd_tapedb);
 
