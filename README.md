@@ -2,8 +2,17 @@
 
 ## Initial setup
 
-1. Setup ESP-IDF +
-   ESP-ADF: https://docs.espressif.com/projects/esp-adf/en/latest/get-started/index.html#step-1-set-up-esp-idf
+1. [Setup ESP-IDF](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/index.html#step-1-set-up-esp-idf), use ESP-IDF [v4.3.1](https://github.com/espressif/esp-idf/releases/tag/v4.3.1)
+2. [Setup ESP-ADF](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/index.html#step-2-get-esp-adf), use latest master version
+3. Patch ESP-ADF to enable audio capture from AUX_IN input. In file `esp-adf/components/audio_board/lyrat_v4_3/board_def.h` change line 49 from:
+
+````
+.adc_input  = AUDIO_HAL_ADC_INPUT_LINE1,        \
+````
+to
+````
+.adc_input  = AUDIO_HAL_ADC_INPUT_LINE2,        \
+````
 
 ## Wi-Fi configuration
 
@@ -32,3 +41,6 @@
 ## Setup CLion
 
 1. https://www.jetbrains.com/help/clion/esp-idf.html#cmake-setup
+
+## ESP32 LyraT 4.3 board
+1. AUX_IN audio quality issue - https://esp32.com/viewtopic.php?t=12407
