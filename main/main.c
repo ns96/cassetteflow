@@ -66,9 +66,9 @@ void app_main(void)
     ESP_LOGI(TAG, "[ 4 ] Create and start HTTP server");
     ESP_ERROR_CHECK(http_server_start());
 
-    // FIXME uncomment
-//    ESP_LOGI(TAG, "[ 5 ] Create and start input key service");
-//    ESP_ERROR_CHECK(keys_start(set, board_handle));
+    // see https://github.com/espressif/esp-adf/issues/459
+    ESP_LOGI(TAG, "[ 5 ] Create and start input key service");
+    ESP_ERROR_CHECK(keys_start(set, board_handle));
 
     audio_event_iface_cfg_t evt_cfg = AUDIO_EVENT_IFACE_DEFAULT_CFG();
     audio_event_iface_handle_t evt = audio_event_iface_init(&evt_cfg);
