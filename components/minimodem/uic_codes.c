@@ -54,6 +54,7 @@ const char * uic_message_meaning(unsigned int code,
 	} else if (type == UIC_TYPE_TRAINGROUND) {
 		messages = uic_train_to_ground_messages;
 	} else {
+        messages = uic_train_to_ground_messages;    // silence error when assert is disabled
 		assert(0);
 	}
 

@@ -6,17 +6,20 @@
 #include <assert.h>
 
 #include <unistd.h>
+#include <esp_log.h>
 
 #include "fsk.h"
 #include "databits.h"
 
 #include "minimodem_dec_init.h"
 
+static const char *TAG = "MINIMODEM_DECODER";
+
 static float audio_sample_to_float(int16_t i);
 
-static size_t esp32_write_b(void *buf, size_t bytes, audio_element_handle_t self);
+static audio_element_err_t esp32_write_b(char *buf, int bytes, audio_element_handle_t self);
 
-size_t minimodem_decode(minimodem_decoder_struct *dec_str, audio_element_handle_t self);
+audio_element_err_t minimodem_decode(minimodem_decoder_struct *dec_str, audio_element_handle_t self);
 
 ssize_t samples_read(void *buf, size_t nframes, char *in_buf);
 //inline float audio_sample_to_float(int16_t i);
@@ -81,18 +84,23 @@ static int build_expect_bits_string(char *expect_bits_string,
     return j;
 }
 
-size_t minimodem_dec_buf(minimodem_decoder_struct *str, audio_element_handle_t self,
+audio_element_err_t minimodem_dec_buf(minimodem_decoder_struct *str, audio_element_handle_t self,
                          unsigned char *buf, size_t len)
 {
     size_t out_len = 0;
-    const size_t buf_load = (str->samplebuf_size / 2) * 2 * sizeof(int16_t);
+    const size_t buf_load = str->buf_load;
     if (str->buf_part_pos != 0) {
         if (len + str->buf_part_pos > buf_load) {
             memcpy(str->buf_part + str->buf_part_pos, buf,
                    buf_load - str->buf_part_pos);
             buf += buf_load - str->buf_part_pos;
             str->buf = str->buf_part;
-            out_len += minimodem_decode(str, self);
+            int length = minimodem_decode(str, self);
+            if (length < 0) {
+                // return error
+                return length;
+            }
+            out_len += length;
             len -= buf_load - str->buf_part_pos;
             str->buf_part_pos = 0;
         } else {
@@ -104,7 +112,12 @@ size_t minimodem_dec_buf(minimodem_decoder_struct *str, audio_element_handle_t s
     size_t i;
     for (i = 0; i + buf_load <= len; i += buf_load) {
         str->buf = (char *)buf + i;
-        out_len += minimodem_decode(str, self);
+        int length = minimodem_decode(str, self);
+        if (length < 0) {
+            // return error
+            return length;
+        }
+        out_len += length;
     }
     if (i != len) {
         memcpy(str->buf_part, buf + i, len - i);
@@ -155,7 +168,7 @@ minimodem_decoder_struct *minimodem_receive_cfg()
 
     // if i2s_cfg.i2s_config.sample_rate = 48000;
     // then REAL sample rate = 48000*1.25 = 60000
-    sample_rate = 48000;
+    sample_rate = 16000;
 
     int output_mode_binary = 0;
     int output_mode_raw_nbits = 0;
@@ -396,11 +409,15 @@ minimodem_decoder_struct *minimodem_receive_cfg()
     float peak_confidence = 0.0;
 
     minimodem_decoder_struct *ret = malloc(sizeof(minimodem_decoder_struct));
-    if (ret == NULL)
+    if (ret == NULL) {
+        ESP_LOGE(TAG, "Out of memory allocating: minimodem_decoder_struct");
         return NULL;
-    char *buf_part = malloc((samplebuf_size / 2) * 2 * sizeof(int16_t));
+    }
+    const size_t buf_load = (samplebuf_size / 2) * 2 * sizeof(int16_t);
+    char *buf_part = malloc(buf_load);
     if (buf_part == NULL) {
         free(ret);
+        ESP_LOGE(TAG, "Out of memory allocating: buf_part");
         return NULL;
     }
     *ret =
@@ -435,25 +452,24 @@ minimodem_decoder_struct *minimodem_receive_cfg()
             amplitude_total, .noconfidence =
             noconfidence, .bfsk_databits_decode =
             bfsk_databits_decode, .fskp = fskp,
-                .buf_part = buf_part, .buf_part_pos = 0};
+                .buf_part = buf_part, .buf_part_pos = 0,
+                .buf_load = buf_load
+            };
     return ret;
 }
 
 // see https://github.com/kamalmostafa/minimodem/blob/bb2f34cf5148f101563aa926e201d306edbacbd3/src/minimodem.c#L1137
-size_t minimodem_decode(minimodem_decoder_struct *dec_str, audio_element_handle_t self)
+audio_element_err_t minimodem_decode(minimodem_decoder_struct *dec_str, audio_element_handle_t self)
 {
-    const float nsamples_per_bit = dec_str->sample_rate
-        / dec_str->bfsk_data_rate;
+    const float nsamples_per_bit = dec_str->sample_rate / dec_str->bfsk_data_rate;
     const int quiet_mode = 1;
     const unsigned int bfsk_frame_n_bits = dec_str->bfsk_n_data_bits
         + dec_str->bfsk_nstartbits + dec_str->bfsk_nstopbits;
     const float frame_n_bits = bfsk_frame_n_bits;
     const unsigned int frame_nsamples = nsamples_per_bit * frame_n_bits + 0.5f;
     const float fsk_frame_overscan = 0.5;
-    const unsigned int expect_nsamples = nsamples_per_bit
-        * dec_str->expect_n_bits;
-    const unsigned int nsamples_overscan = nsamples_per_bit * fsk_frame_overscan
-        + 0.5f;
+    const unsigned int expect_nsamples = nsamples_per_bit * dec_str->expect_n_bits;
+    const unsigned int nsamples_overscan = nsamples_per_bit * fsk_frame_overscan + 0.5f;
     int is_read = 0;
     size_t wr_bytes = 0;
     while (!is_read) {
@@ -791,23 +807,26 @@ size_t minimodem_decode(minimodem_decoder_struct *dec_str, audio_element_handle_
         /*
          * Print the output buffer to stdout
          */
-        // TODO
         // https://github.com/kamalmostafa/minimodem/blob/bb2f34cf5148f101563aa926e201d306edbacbd3/src/minimodem.c#L1451
 //		if (write(1, dataoutbuf, dataout_nbytes) < 0)
 //			perror("write");
-        esp32_write_b(dataoutbuf, dataout_nbytes, self);
+        audio_element_err_t ret = esp32_write_b(dataoutbuf, dataout_nbytes, self);
+        if (ret < 0) {
+            // return error code
+            return ret;
+        }
         wr_bytes += dataout_nbytes;
     }
     return wr_bytes;
 }
 
-static size_t esp32_write_b(void *buf, size_t bytes, audio_element_handle_t self)
+static audio_element_err_t esp32_write_b(char *buf, int bytes, audio_element_handle_t self)
 {
-    if (audio_element_output(self, (char *)buf, bytes) != bytes) {
-        fprintf(stderr, "esp32_write error!\n");
-        return -1;
+    audio_element_err_t ret = audio_element_output(self, buf, bytes);
+    if (ret != bytes) {
+        ESP_LOGE(TAG, "esp32_write_b: %d", ret);
     }
-    return bytes;
+    return ret;
 }
 
 // input is 16bit Little endian stereo (S16LE)

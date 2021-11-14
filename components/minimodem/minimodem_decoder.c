@@ -1,4 +1,5 @@
 
+#include <string.h>
 #include "esp_log.h"
 #include "audio_mem.h"
 #include "audio_element.h"
@@ -34,14 +35,18 @@ static esp_err_t _minimodem_decoder_close(audio_element_handle_t self)
     return ESP_OK;
 }
 
-static int _minimodem_decoder_process(audio_element_handle_t self, char *in_buffer, int in_len)
+static audio_element_err_t _minimodem_decoder_process(audio_element_handle_t self, char *in_buffer, int in_len)
 {
     minimodem_decoder_t *minimodem_dec = (minimodem_decoder_t *)audio_element_getdata(self);
     int r_size = audio_element_input(self, in_buffer, in_len);
     int out_len = 0;
     if (r_size > 0) {
-        // TODO
-        out_len = minimodem_dec_buf(minimodem_dec->minimodem_str, self, (unsigned char *)in_buffer, in_len);
+        out_len = minimodem_dec_buf(minimodem_dec->minimodem_str, self, (unsigned char *)in_buffer, r_size);
+//        ESP_LOGD(TAG, "process read: %d, out: %d", r_size, out_len);
+        if (out_len == 0) {
+            // no data from minimodem, report as an empty line
+            out_len = 1;
+        }
         if (out_len > 0) {
             audio_element_update_byte_pos(self, out_len);
         }

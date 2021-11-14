@@ -14,6 +14,7 @@ set(COMPONENT_SRCS
         eq.c
         led.c
         mp3info.c
+        filter_line_reader.c
         )
 set(COMPONENT_ADD_INCLUDEDIRS .)
 

@@ -23,7 +23,7 @@ typedef struct
     minimodem_decoder_struct *minimodem_str;  /*!< Minimodem struct */
 } minimodem_decoder_cfg_t;
 
-#define MINIMODEM_DECODER_TASK_STACK          (3 * 1024)
+#define MINIMODEM_DECODER_TASK_STACK          (8 * 1024)
 #define MINIMODEM_DECODER_TASK_CORE           (0)
 #define MINIMODEM_DECODER_TASK_PRIO           (5)
 #define MINIMODEM_DECODER_RINGBUFFER_SIZE     (8 * 1024)
@@ -33,7 +33,7 @@ typedef struct
     .task_stack         = MINIMODEM_DECODER_TASK_STACK,\
     .task_core          = MINIMODEM_DECODER_TASK_CORE,\
     .task_prio          = MINIMODEM_DECODER_TASK_PRIO,\
-    .stack_in_ext       = true,\
+    .stack_in_ext       = false,\
     .minimodem_str      = minimodem_receive_cfg(), \
 }
 

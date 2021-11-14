@@ -47,11 +47,13 @@ typedef struct
     char *buf;
     char *buf_part;
     size_t buf_part_pos;
+    // size of buf_part
+    size_t buf_load;
 } minimodem_decoder_struct;
 
 minimodem_decoder_struct *minimodem_receive_cfg();
 
-size_t minimodem_dec_buf(minimodem_decoder_struct *str,
+audio_element_err_t minimodem_dec_buf(minimodem_decoder_struct *str,
                          audio_element_handle_t self, unsigned char *buf, size_t len);
 
 #ifdef __cplusplus
