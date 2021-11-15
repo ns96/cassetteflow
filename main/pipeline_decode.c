@@ -25,6 +25,9 @@ static const char *TAG = "cf_pipeline_decode";
 
 #define PLAYBACK_RATE       48000
 
+// time in millis to wait for new data from minimodem before considering the tape is stopped
+#define MINIMODEM_WAIT_TIME (1000)
+
 // playback of mp3 files from sd card with equalizer
 static audio_pipeline_handle_t pipeline_for_play = NULL;
 // record audio from line-in, decode with minimodem and output line by line (raw output)
@@ -38,7 +41,12 @@ static audio_element_state_t el_state = AEL_STATE_STOPPED;
 // The size of gain array should be the multiplication of NUMBER_BAND and number channels of audio stream data.
 static int equalizer_band_gain[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+static char current_playing_mp3_id[11] = {0};
+static int64_t current_playing_mp3_start_time = 0; // in microseconds
+
 static char last_line_from_minimodem[64] = {0};
+// in microseconds
+static int64_t last_line_from_minimodem_time_us = 0;
 
 
 static esp_err_t create_playback_pipeline(void)
@@ -237,14 +245,12 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
 {
     const size_t line_len = strlen(line);
 
-    static char current_playing_mp3_id[11] = {0};
-    static int64_t current_playing_mp3_start_time = 0; // in microseconds
-
     raw_queue_message_t msg;
     strcpy(msg.line, line);
     raw_queue_send(&msg);
 
     strcpy(last_line_from_minimodem, line);
+    last_line_from_minimodem_time_us = esp_timer_get_time();
 
     if (line_len != TAPEFILE_LINE_LENGTH) {
         ESP_LOGE(TAG, "unexpected line_len: %d", line_len);
@@ -320,7 +326,18 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     strcpy(current_playing_mp3_id, mp3_id);
     current_playing_mp3_start_time = esp_timer_get_time();
 
-    // TODO d. If no line data is being received i.e. the cassette tape was stopped, then stop playback of the current MP3 and wait for more data.
+    return ESP_OK;
+}
+
+static esp_err_t pipeline_decode_handle_no_line_data(void)
+{
+    // d. If no line data is being received i.e. the cassette tape was stopped, then stop playback of the current MP3 and wait for more data.
+    audio_pipeline_stop(pipeline_for_play);
+    audio_pipeline_wait_for_stop(pipeline_for_play);
+
+    // reset current playing info
+    current_playing_mp3_id[0] = 0;
+    current_playing_mp3_start_time = 0;
 
     return ESP_OK;
 }
@@ -364,9 +381,17 @@ esp_err_t pipeline_decode_event_loop(audio_event_iface_handle_t evt)
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
     while (1) {
-        audio_event_iface_msg_t msg;
+        audio_event_iface_msg_t msg = {0};
 
-        audio_event_iface_listen(evt, &msg, portMAX_DELAY);
+        esp_err_t ret = audio_event_iface_listen(evt, &msg, MINIMODEM_WAIT_TIME);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Timeout waiting for line data");
+
+            if (esp_timer_get_time() - last_line_from_minimodem_time_us > MINIMODEM_WAIT_TIME * 1000) {
+                pipeline_decode_handle_no_line_data();
+            }
+            continue;
+        }
         ESP_LOGD(TAG, "%s event:%d", __FUNCTION__, msg.cmd);
 
         if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT && msg.source == (void *)mp3_decoder
