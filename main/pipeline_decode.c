@@ -38,6 +38,9 @@ static audio_element_state_t el_state = AEL_STATE_STOPPED;
 // The size of gain array should be the multiplication of NUMBER_BAND and number channels of audio stream data.
 static int equalizer_band_gain[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+static char last_line_from_minimodem[64] = {0};
+
+
 static esp_err_t create_playback_pipeline(void)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
@@ -241,6 +244,8 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     strcpy(msg.line, line);
     raw_queue_send(&msg);
 
+    strcpy(last_line_from_minimodem, line);
+
     if (line_len != TAPEFILE_LINE_LENGTH) {
         ESP_LOGE(TAG, "unexpected line_len: %d", line_len);
         return ESP_FAIL;
@@ -431,7 +436,16 @@ void pipeline_decode_status(char *buf, size_t buf_size)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
-    //TODO
+    // state of playback
+    audio_element_state_t state = audio_element_get_state(i2s_stream_writer);
+
+    if (state == AEL_STATE_RUNNING) {
+        // returns “DECODE” and the current line record if playing
+        snprintf(buf, buf_size, "DECODE %s", last_line_from_minimodem);
+    } else {
+        // If nothing is playing, returns “playback stopped”.
+        snprintf(buf, buf_size, "playback stopped");
+    }
 }
 
 /**
