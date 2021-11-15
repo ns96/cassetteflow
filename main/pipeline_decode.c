@@ -19,6 +19,7 @@
 #include "minimodem_decoder.h"
 #include "filter_line_reader.h"
 #include "mp3db.h"
+#include "raw_queue.h"
 
 static const char *TAG = "cf_pipeline_decode";
 
@@ -236,6 +237,9 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     static char current_playing_mp3_id[11] = {0};
     static int64_t current_playing_mp3_start_time = 0; // in microseconds
 
+    raw_queue_message_t msg;
+    strcpy(msg.line, line);
+    raw_queue_send(&msg);
 
     if (line_len != TAPEFILE_LINE_LENGTH) {
         ESP_LOGE(TAG, "unexpected line_len: %d", line_len);
