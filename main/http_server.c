@@ -165,6 +165,7 @@ static esp_err_t handler_uri_raw(httpd_req_t *req)
         ret = raw_queue_get(&msg, 10 * 1000);
         if (ret == ESP_OK) {
             // send one line at a time
+            strncat(msg.line, "\n", sizeof(msg.line) - 1);
             ret = httpd_resp_send_chunk(req, msg.line, HTTPD_RESP_USE_STRLEN);
         }
     }
