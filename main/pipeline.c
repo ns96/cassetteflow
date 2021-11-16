@@ -257,6 +257,7 @@ esp_err_t pipeline_init(audio_event_iface_handle_t event_handle)
  */
 esp_err_t pipeline_main(void)
 {
-    vTaskDelay(100);
+    // delay 1 second
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     return ESP_OK;
 }
