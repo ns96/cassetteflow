@@ -162,7 +162,7 @@ static esp_err_t handler_uri_raw(httpd_req_t *req)
     while (ret == ESP_OK) {
         // read current line (up to 10 seconds)
         raw_queue_message_t msg;
-        ret = raw_queue_get(&msg, 10 * 1000);
+        ret = raw_queue_get(&msg, pdMS_TO_TICKS(10 * 1000));
         if (ret == ESP_OK) {
             // send one line at a time
             strncat(msg.line, "\n", sizeof(msg.line) - 1);

@@ -16,6 +16,6 @@ typedef struct
 esp_err_t raw_queue_init(void);
 void raw_queue_reset(void);
 esp_err_t raw_queue_send(raw_queue_message_t *msg);
-esp_err_t raw_queue_get(raw_queue_message_t *msg, int timeout_ms);
+esp_err_t raw_queue_get(raw_queue_message_t *msg, int timeout_ticks);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_RAW_QUEUE_H

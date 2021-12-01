@@ -26,7 +26,7 @@ static const char *TAG = "cf_pipeline_decode";
 #define PLAYBACK_RATE       48000
 
 // time in millis to wait for new data from minimodem before considering the tape is stopped
-#define MINIMODEM_WAIT_TIME (1000)
+#define MINIMODEM_WAIT_TIME (pdMS_TO_TICKS(1000))
 
 // playback of mp3 files from sd card with equalizer
 static audio_pipeline_handle_t pipeline_for_play = NULL;

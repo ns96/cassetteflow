@@ -32,10 +32,10 @@ esp_err_t raw_queue_send(raw_queue_message_t *msg)
 /**
  * Blocking waiting for a message to receive from the queue
  * @param msg
- * @param timeout_ms
+ * @param timeout_ticks
  * @return ESP_OK is message read
  */
-esp_err_t raw_queue_get(raw_queue_message_t *msg, int timeout_ms)
+esp_err_t raw_queue_get(raw_queue_message_t *msg, int timeout_ticks)
 {
-    return xQueueReceive(queue, msg, pdMS_TO_TICKS(timeout_ms)) == pdTRUE ? ESP_OK : ESP_FAIL;
+    return xQueueReceive(queue, msg, timeout_ticks) == pdTRUE ? ESP_OK : ESP_FAIL;
 }
