@@ -42,7 +42,6 @@ static audio_element_state_t el_state = AEL_STATE_STOPPED;
 static int equalizer_band_gain[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 static char current_playing_mp3_id[11] = {0};
-static int64_t current_playing_mp3_start_time = 0; // in microseconds
 
 static char last_line_from_minimodem[64] = {0};
 // in microseconds
@@ -261,36 +260,42 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     char side;
     int track_num;
     char mp3_id[11];
-    int playtime;
-    int playtime_total;
+    int playtime_seconds;   // seconds
+    int playtime_total_seconds; // seconds
 
     // b. Once a line of data is processed, then start playback of the indicated MP3 file at the indicated time.
     //  As more lines of data are read from the cassette, compare the MP3 ID/time to the one currently playing.
     //  If they match (need to see how accurately this needs to be in sync, but I think within +/- 2 seconds should be fine) continue playing.
 
     if (sscanf(line, "%4s%c_%02d_%10s_%04d_%04d",
-                          tape_id, &side, &track_num, mp3_id, &playtime, &playtime_total) != 6) {
+               tape_id, &side, &track_num, mp3_id, &playtime_seconds, &playtime_total_seconds) != 6) {
         ESP_LOGE(TAG, "could not decode line");
         return ESP_FAIL;
     }
 
-    // get current playing mp3 time
-    int current_playing_mp3_time = -1000000;
+    int fatfs_byte_pos = 0; // start from the beginning by default
+    int current_playing_mp3_time_seconds = 0;
     audio_element_state_t state = audio_element_get_state(i2s_stream_writer);
+    audio_element_info_t fatfs_music_info = {0};
+    audio_element_info_t mp3_music_info = {0};
     if (state == AEL_STATE_RUNNING) {
         // pipeline is playing, get current mp3 time
-        current_playing_mp3_time = (esp_timer_get_time() - current_playing_mp3_start_time) / 1000000L;
+        audio_element_getinfo(fatfs_stream_reader, &fatfs_music_info);
+        audio_element_getinfo(mp3_decoder, &mp3_music_info);
+        if (mp3_music_info.bps > 0) {
+            current_playing_mp3_time_seconds = fatfs_music_info.byte_pos / (mp3_music_info.bps / 8);
+        }
     }
 
     if (strcmp(mp3_id, current_playing_mp3_id) == 0) {
-        if (abs(playtime - current_playing_mp3_time) <= 2) {
+        if (abs(playtime_seconds - current_playing_mp3_time_seconds) <= 2) {
             ESP_LOGI(TAG, "already playing this file");
             return ESP_OK;
-        } else {
-            ESP_LOGI(TAG, "seek to: %d", playtime);
-            // TODO seek to playtime
-            return ESP_OK;
         }
+    }
+    if (playtime_seconds > 0) {
+        ESP_LOGI(TAG, "seek to: %d", playtime_seconds);
+        fatfs_byte_pos = playtime_seconds * (mp3_music_info.bps / 8);
     }
 
     char filepath[256];
@@ -305,6 +310,7 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     switch (state) {
         case AEL_STATE_INIT:
             audio_element_set_uri(fatfs_stream_reader, filepath);
+            audio_element_set_byte_pos(fatfs_stream_reader, fatfs_byte_pos);
             audio_pipeline_run(pipeline_for_play);
             break;
         case AEL_STATE_RUNNING:
@@ -316,6 +322,7 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
             audio_pipeline_reset_elements(pipeline_for_play);
             audio_pipeline_change_state(pipeline_for_play, AEL_STATE_INIT);
             audio_element_set_uri(fatfs_stream_reader, filepath);
+            audio_element_set_byte_pos(fatfs_stream_reader, fatfs_byte_pos);
             audio_pipeline_run(pipeline_for_play);
             break;
         default:
@@ -324,7 +331,6 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     }
 
     strcpy(current_playing_mp3_id, mp3_id);
-    current_playing_mp3_start_time = esp_timer_get_time();
 
     return ESP_OK;
 }
@@ -332,12 +338,34 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
 static esp_err_t pipeline_decode_handle_no_line_data(void)
 {
     // d. If no line data is being received i.e. the cassette tape was stopped, then stop playback of the current MP3 and wait for more data.
-    audio_pipeline_stop(pipeline_for_play);
-    audio_pipeline_wait_for_stop(pipeline_for_play);
+
+    audio_element_state_t state = audio_element_get_state(i2s_stream_writer);
+    switch (state) {
+        case AEL_STATE_NONE:
+        case AEL_STATE_INIT:
+            /* nothing to do here */
+            break;
+        case AEL_STATE_INITIALIZING:
+        case AEL_STATE_RUNNING:
+        case AEL_STATE_PAUSED:
+            audio_pipeline_stop(pipeline_for_play);
+            audio_pipeline_wait_for_stop(pipeline_for_play);
+            /* fallthrough */
+        case AEL_STATE_STOPPED:
+        case AEL_STATE_FINISHED:
+        case AEL_STATE_ERROR:
+            audio_pipeline_reset_ringbuffer(pipeline_for_play);
+            audio_pipeline_reset_elements(pipeline_for_play);
+            audio_pipeline_change_state(pipeline_for_play, AEL_STATE_INIT);
+            break;
+        default:
+            ESP_LOGE(TAG, "pipeline_decode_handle_no_line_data: unhandled state %d", state);
+            break;
+    }
 
     // reset current playing info
     current_playing_mp3_id[0] = 0;
-    current_playing_mp3_start_time = 0;
+    last_line_from_minimodem_time_us = 0;
 
     return ESP_OK;
 }
@@ -387,7 +415,8 @@ esp_err_t pipeline_decode_event_loop(audio_event_iface_handle_t evt)
         if (ret != ESP_OK) {
             ESP_LOGW(TAG, "Timeout waiting for line data");
 
-            if (esp_timer_get_time() - last_line_from_minimodem_time_us > MINIMODEM_WAIT_TIME * 1000) {
+            if (last_line_from_minimodem_time_us > 0
+                    && esp_timer_get_time() - last_line_from_minimodem_time_us > MINIMODEM_WAIT_TIME * 1000) {
                 pipeline_decode_handle_no_line_data();
             }
             continue;
