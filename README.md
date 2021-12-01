@@ -38,6 +38,18 @@ to
 1. Encode: `minimodem --tx 1200 -f wavfile.wav`
 2. Decode: `minimodem -r 1200`
 
+## CPU load measurement
+
+Enable the following configuration options (`idf.py menuconfig`) to get CPU load reported to the serial console every 1 second:
+
+```
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y
+CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y
+```
+
 ## Setup CLion
 
 1. https://www.jetbrains.com/help/clion/esp-idf.html#cmake-setup
