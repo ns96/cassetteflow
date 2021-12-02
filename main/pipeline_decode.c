@@ -465,20 +465,20 @@ esp_err_t pipeline_decode_stop(void)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
-    if (pipeline_for_play != NULL) {
-        audio_pipeline_stop(pipeline_for_play);
-        audio_pipeline_wait_for_stop(pipeline_for_play);
-
-        audio_pipeline_deinit(pipeline_for_play);
-        pipeline_for_play = NULL;
-    }
-
     if (pipeline_for_record != NULL) {
         audio_pipeline_stop(pipeline_for_record);
         audio_pipeline_wait_for_stop(pipeline_for_record);
 
         audio_pipeline_deinit(pipeline_for_record);
         pipeline_for_record = NULL;
+    }
+
+    if (pipeline_for_play != NULL) {
+        audio_pipeline_stop(pipeline_for_play);
+        audio_pipeline_wait_for_stop(pipeline_for_play);
+
+        audio_pipeline_deinit(pipeline_for_play);
+        pipeline_for_play = NULL;
     }
 
     el_state = AEL_STATE_STOPPED;
