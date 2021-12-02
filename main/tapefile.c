@@ -13,7 +13,7 @@
 
 static const char *TAG = "cf_tapefile";
 
-static const int replicate = 1;
+static const int replicate = 4;
 
 static esp_err_t format_line(FILE *file,
                              const char *tape_id,
@@ -55,12 +55,10 @@ static esp_err_t format_line_mute(FILE *file,
     //indicates that the MP3 should be loaded, but not played to allow for delay between
     //each mp3 file.
     //5. 4 digit number indicating the total number of seconds played so far on tape.
-    for (int i = 0; i < replicate; ++i) {
-        int written = fprintf(file, "%4s%c_%02d_%10s_%03dM_%04d\n",
-                              tape_id, side, track_num, mp3_id, mute_seconds, playtime_total);
-        if (written <= 0) {
-            return ESP_FAIL;
-        }
+    int written = fprintf(file, "%4s%c_%02d_%10s_%03dM_%04d\n",
+                          tape_id, side, track_num, mp3_id, mute_seconds, playtime_total);
+    if (written <= 0) {
+        return ESP_FAIL;
     }
     return ESP_OK;
 }
