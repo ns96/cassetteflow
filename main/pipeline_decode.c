@@ -293,17 +293,19 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
             return ESP_OK;
         }
     }
-    if (playtime_seconds > 0) {
-        ESP_LOGI(TAG, "seek to: %d", playtime_seconds);
-        fatfs_byte_pos = playtime_seconds * (mp3_music_info.bps / 8);
-    }
 
     char filepath[256];
-    int fileduration = 0;
+    int file_duration = 0;
+    int file_avg_bitrate = 0;
 
-    if (mp3db_file_for_id(mp3_id, filepath, &fileduration) != ESP_OK) {
+    if (mp3db_file_for_id(mp3_id, filepath, &file_duration, &file_avg_bitrate) != ESP_OK) {
         ESP_LOGE(TAG, "could get file for mp3id: %s", mp3_id);
         return ESP_FAIL;
+    }
+
+    if (playtime_seconds > 0) {
+        ESP_LOGI(TAG, "seek to: %d", playtime_seconds);
+        fatfs_byte_pos = (int64_t)playtime_seconds * (int64_t)file_avg_bitrate / 8;
     }
 
     // c. If the line data MP3 ID/time does not match, then switch to the indicated MP3 file/time and start playing.

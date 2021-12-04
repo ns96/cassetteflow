@@ -9,6 +9,6 @@
 
 esp_err_t mp3db_scan(void);
 esp_err_t mp3db_stop(void);
-esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration);
+esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration, int *avg_bitrate);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_MP3DB_H

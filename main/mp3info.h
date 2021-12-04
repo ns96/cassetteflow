@@ -7,6 +7,6 @@
 
 #include <stdio.h>
 
-int mp3info_get_duration(const char *filepath);
+int mp3info_get_info(const char *filepath, int *duration, int *avg_bitrate);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_MP3INFO_H

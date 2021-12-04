@@ -49,6 +49,7 @@ static void mp3db_filename_to_id10c(const char *filename, char *id10c)
 static esp_err_t mp3db_file_save(const char *filepath)
 {
     FILE *fd_db;
+    int duration = 0, avg_bitrate = 0;
 
     fd_db = fopen(FILE_MP3DB, "a");
     if (!fd_db) {
@@ -56,12 +57,12 @@ static esp_err_t mp3db_file_save(const char *filepath)
         return ESP_FAIL;
     }
 
-    int duration = mp3info_get_duration(filepath);
+    mp3info_get_info(filepath, &duration, &avg_bitrate);
     const char *filename = filepath + strlen("/sdcard/");
     char mp3id[11];
     mp3db_filename_to_id10c(filename, mp3id);
 
-    fprintf(fd_db, "%s\t%d\t%s\n", mp3id, duration, filepath);
+    fprintf(fd_db, "%s\t%d\t%d\t%s\n", mp3id, duration, avg_bitrate, filepath);
 
     fclose(fd_db);
     return ESP_OK;
@@ -91,7 +92,7 @@ static bool mp3db_file_exists(const char *filepath)
     }
 
     // read DB line by line
-    while (fscanf(fd_db, "%*s\t%*d\t%1024[^\n]\n", line_file) == 1) {
+    while (fscanf(fd_db, "%*s\t%*d\t%*d\t%1024[^\n]\n", line_file) == 1) {
         if (strcmp(filepath, line_file) == 0) {
             // file present in the DB
             found = true;
@@ -111,14 +112,17 @@ static bool mp3db_file_exists(const char *filepath)
  * @param filepath output full path with filename (/sdcard/file.mp3) (at least SDCARD_FILE_PREV_NAME-1 bytes)
  *  (can be NULL)
  * @param duration output duration in seconds (can be NULL)
+ * @param avg_bitrate output average bitrate in bits per second (can be NULL)
  * @return true if file is already in the db
  */
-esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration)
+esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration, int *avg_bitrate)
 {
     FILE *fd_db;
     char line_mp3id[11];
     char *line_file;
     int line_duration = 0;
+    int line_avg_bitrate = 0;
+
     esp_err_t ret = ESP_FAIL;
 
     line_file = malloc(MP3DB_MAX_LINE_LENGTH);
@@ -134,7 +138,7 @@ esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration)
     }
 
     // read DB line by line
-    while (fscanf(fd_db, "%10s\t%d\t%1024[^\n]\n", line_mp3id, &line_duration, line_file) == 3) {
+    while (fscanf(fd_db, "%10s\t%d\t%d\t%1024[^\n]\n", line_mp3id, &line_duration, &line_avg_bitrate, line_file) == 4) {
         if (strcmp(mp3id, line_mp3id) == 0) {
             // file present in the DB
             if (filepath != NULL) {
@@ -142,6 +146,9 @@ esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration)
             }
             if (duration != NULL) {
                 *duration = line_duration;
+            }
+            if (avg_bitrate != NULL) {
+                *avg_bitrate = line_avg_bitrate;
             }
             ret = ESP_OK;
             break;

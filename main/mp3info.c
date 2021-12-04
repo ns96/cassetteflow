@@ -74,7 +74,7 @@ static int frame_size(int16_t layer, int bitrate, int sample_rate, uint8_t paddi
         return ((144 * bitrate * 1000) / sample_rate) + padding_bit;
 }
 
-static void parseFrameHeader(const uint8_t *block, int *framesize, int *samples, int *sample_rate)
+static void parseFrameHeader(const uint8_t *block, int *framesize, int *samples, int *sample_rate, int *bitrate)
 {
     //uint8_t b0=block[0];//will always be 0xff
     uint8_t b1 = block[1];
@@ -83,7 +83,7 @@ static void parseFrameHeader(const uint8_t *block, int *framesize, int *samples,
 
     uint8_t version_bits = (b1 & 0x18) >> 3;
     int16_t version = versions[version_bits]; // MPEGVersion
-    int16_t simple_version = 0;
+    int16_t simple_version;
 
     if (version == 25) {
         simple_version = 2;
@@ -104,7 +104,7 @@ static void parseFrameHeader(const uint8_t *block, int *framesize, int *samples,
     //bitrate_key = sprintf('V%dL%d', simple_version , layer);
     int16_t bitrate_key = (simple_version - 1) * 3 + (layer - 1);
     uint8_t bitrate_idx = (b2 & 0xf0) >> 4;
-    int bitrate = bitrates[bitrate_key][bitrate_idx];
+    *bitrate = bitrates[bitrate_key][bitrate_idx];
 
     uint8_t sample_rate_idx = (b2 & 0x0c) >> 2;//0xc => b1100
     *sample_rate = sample_rates[version - 1][sample_rate_idx];
@@ -116,30 +116,34 @@ static void parseFrameHeader(const uint8_t *block, int *framesize, int *samples,
     uint8_t original_bit = (b3 & 0x04) >> 2;
     uint8_t emphasis = (b3 & 0x03);
 
-    *framesize = frame_size(layer, bitrate, *sample_rate, padding_bit);
+    *framesize = frame_size(layer, *bitrate, *sample_rate, padding_bit);
     *samples = samples_table[simple_version - 1][layer - 1];
 }
 
-/**
- * Calculate mp3 file duration in seconds
- * @param file, File must be opened in 'rb' mode
- * @return duration in seconds
- */
-int mp3info_get_duration(const char *filepath)
+ /**
+  * Calculate mp3 file duration in seconds and sampling_rate
+  * @param filepath, File must be opened in 'rb' mode
+  * @param duration duration in seconds
+  * @param avg_bitrate average bitrate (bits per seconds)
+  * @return 0 - OK, -1 - ERROR
+  */
+int mp3info_get_info(const char *filepath, int *duration, int *avg_bitrate)
 {
     FILE *file;
-    float duration = 0;
+    float f_duration = 0;
     uint8_t block[10];
+    int mp3_frames = 0;
+    int sum_bitrate = 0;    // in kbps
 
     file = fopen(filepath, "rb");
     if (file == NULL) {
-        return 0;
+        return -1;
     }
 
     if (fread(block, 1, sizeof(block), file) != sizeof(block)) {
         //read file error
         fclose(file);
-        return 0;
+        return -1;
     }
 
     int offset = skipID3v2Tag(block, sizeof(block));
@@ -150,11 +154,13 @@ int mp3info_get_duration(const char *filepath)
         if (fread(block, 1, sizeof(block), file) == sizeof(block)) {
             //looking for 1111 1111 111 (frame synchronization bits)
             if (block[0] == 0xff && block[1] & 0xe0) {
-                int samples = 0, framesize = 0, sampling_rate = 0;
-                parseFrameHeader(block, &framesize, &samples, &sampling_rate);
+                int samples = 0, framesize = 0, sampling_rate = 0, bitrate = 0;
+                parseFrameHeader(block, &framesize, &samples, &sampling_rate, &bitrate);
                 fseek(file, framesize - 10, SEEK_CUR);
                 if ((samples > 0) && (sampling_rate > 0)) {
-                    duration += ((float)samples / sampling_rate);
+                    f_duration += ((float)samples / sampling_rate);
+                    sum_bitrate += bitrate;
+                    mp3_frames++;
                 }
             } else if (strncmp((char *)&block, "TAG", 3) == 0) {
                 //found idv3.1 tag, skip it
@@ -166,5 +172,7 @@ int mp3info_get_duration(const char *filepath)
     }
 
     fclose(file);
-    return (int)duration;
+    *duration = (int)f_duration;
+    *avg_bitrate = (sum_bitrate / mp3_frames) * 1000;
+    return 0;
 }
