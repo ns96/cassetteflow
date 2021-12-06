@@ -81,7 +81,7 @@ esp_err_t pipeline_passthrough_event_loop(audio_event_iface_handle_t evt)
         }
     }
 
-    return pipeline_passthrough_stop();
+    return ESP_OK;
 }
 
 esp_err_t pipeline_passthrough_stop(void)
