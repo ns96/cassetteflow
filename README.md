@@ -16,6 +16,9 @@ to
 
 ## Wi-Fi configuration
 
+1. Create wifi_config.txt in the root of the SD card
+2. Add one line in the following format: `<WiFIAP>\t<password>` (WiFi AP and password separated with TAB on one line)
+- or
 1. Open main/config.h
 2. Set CONFIG_WIFI_SSID and CONFIG_WIFI_PASSWORD to your Wi-Fi AP
 

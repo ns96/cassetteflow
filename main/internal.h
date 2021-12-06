@@ -23,4 +23,6 @@ enum cf_mode
 // equalizer preset file (CSV format, 10 bands)
 #define FILE_EQ     "/sdcard/eq.txt"
 
+#define FILE_WIFI_CONFIG "/sdcard/wifi_config.txt"
+
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_INTERNAL_H
