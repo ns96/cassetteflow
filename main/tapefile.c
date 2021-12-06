@@ -137,6 +137,7 @@ esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, 
 
     if (mp3id != NULL) {
         fputs(tape_id, fd_tapedb);
+        fputc(side, fd_tapedb);
         fputc('\t', fd_tapedb);
     }
 
