@@ -21,7 +21,7 @@ static esp_err_t input_key_service_cb(periph_service_handle_t handle, periph_ser
     audio_hal_get_volume(board_handle->audio_hal, &player_volume);
 
     if (evt->type == INPUT_KEY_SERVICE_ACTION_CLICK_RELEASE) {
-        ESP_LOGI(TAG, "[ * ] input key id is %d", (int)evt->data);
+        ESP_LOGD(TAG, "[ * ] input key id is %d", (int)evt->data);
         switch ((int)evt->data) {
             case INPUT_KEY_USER_ID_REC:
                 ESP_LOGI(TAG, "[ * ] [F1] input key event");

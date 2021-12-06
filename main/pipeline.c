@@ -83,10 +83,14 @@ void pipeline_set_side(const char side)
 
 void pipeline_handle_play(void)
 {
-    ESP_LOGI(TAG, "handle play");
+    ESP_LOGI(TAG, "handle PLAY key");
 
     switch (pipeline_mode) {
         case MODE_DECODE:
+            // In DECODE mode, will switch between playing the mp3 file
+            // indicated by the data read from the cassette tape (default),
+            // or outputting the raw audio data from cassette to the headphone output.
+            // It does not control the playback of mp3 files.
             pipeline_stop_decoding();
             if (pipeline_decode_mode == PIPELINE_DECODE_MODE_DEFAULT) {
                 pipeline_decode_mode = PIPELINE_DECODE_MODE_PASSTHROUGH;
@@ -96,6 +100,9 @@ void pipeline_handle_play(void)
             pipeline_start_decoding();
             break;
         case MODE_ENCODE:
+            // In ENCODE mode, pressing it will stop the encoding process, just like sending the “STOP” command,
+            // if an encoding is in progress. If no encoding is in progress and the mixtape file (SideA.txt by default)
+            // is present, start the encoding process.
             if (pipeline_encode_is_running()) {
                 pipeline_stop_encoding();
             } else {
@@ -114,7 +121,7 @@ void pipeline_handle_play(void)
  */
 void pipeline_handle_set(void)
 {
-    ESP_LOGI(TAG, "handle SET");
+    ESP_LOGI(TAG, "handle SET key");
 
     esp_err_t ret = ESP_OK;
     const char *filename = FILE_EQ;

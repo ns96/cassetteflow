@@ -162,7 +162,8 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(esp_netif_init());
 
-    esp_log_level_set("*", ESP_LOG_INFO);
+    esp_log_level_set("*", ESP_LOG_DEBUG);
+    esp_log_level_set("efuse", ESP_LOG_NONE);
 #if 1
     esp_log_level_set(TAG, ESP_LOG_DEBUG);
     esp_log_level_set("AUDIO_ELEMENT", ESP_LOG_DEBUG);
@@ -174,8 +175,9 @@ void app_main(void)
     esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
 
     ESP_LOGI(TAG, "[1.1] Initialize and start peripherals");
-    audio_board_key_init(set);
     audio_board_sdcard_init(set, SD_MODE_1_LINE);
+    // init keys after SD card to make Vol- work
+    audio_board_key_init(set);
 
     ESP_LOGI(TAG, "[1.2] Create LED service instance");
     led_init();
@@ -204,8 +206,9 @@ void app_main(void)
     audio_event_iface_cfg_t evt_cfg = AUDIO_EVENT_IFACE_DEFAULT_CFG();
     audio_event_iface_handle_t evt = audio_event_iface_init(&evt_cfg);
 
-    ESP_LOGI(TAG, "[ 6 ] Listening for events from peripherals");
-    audio_event_iface_set_listener(esp_periph_set_get_event_iface(set), evt);
+    // this blocks input_key_service from working
+//    ESP_LOGI(TAG, "[ 6 ] Listening for events from peripherals");
+//    audio_event_iface_set_listener(esp_periph_set_get_event_iface(set), evt);
 
     ESP_LOGI(TAG, "[ 7 ] Set up pipeline");
     pipeline_init(evt);
