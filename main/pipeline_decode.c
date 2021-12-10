@@ -42,6 +42,9 @@ static audio_element_state_t el_state = AEL_STATE_STOPPED;
 static int equalizer_band_gain[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 static char current_playing_mp3_id[11] = {0};
+static char current_playing_mp3_filepath[256];
+static int current_playing_mp3_duration = 0;
+static int current_playing_mp3_avg_bitrate = 0;
 
 static char last_line_from_minimodem[64] = {0};
 // in microseconds
@@ -277,13 +280,11 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     int current_playing_mp3_time_seconds = 0;
     audio_element_state_t state = audio_element_get_state(i2s_stream_writer);
     audio_element_info_t fatfs_music_info = {0};
-    audio_element_info_t mp3_music_info = {0};
     if (state == AEL_STATE_RUNNING) {
         // pipeline is playing, get current mp3 time
         audio_element_getinfo(fatfs_stream_reader, &fatfs_music_info);
-        audio_element_getinfo(mp3_decoder, &mp3_music_info);
-        if (mp3_music_info.bps > 0) {
-            current_playing_mp3_time_seconds = fatfs_music_info.byte_pos / (mp3_music_info.bps / 8);
+        if (current_playing_mp3_avg_bitrate > 0) {
+            current_playing_mp3_time_seconds = fatfs_music_info.byte_pos / (current_playing_mp3_avg_bitrate / 8);
         }
     }
 
@@ -292,26 +293,25 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
             ESP_LOGI(TAG, "already playing this file");
             return ESP_OK;
         }
-    }
-
-    char filepath[256];
-    int file_duration = 0;
-    int file_avg_bitrate = 0;
-
-    if (mp3db_file_for_id(mp3_id, filepath, &file_duration, &file_avg_bitrate) != ESP_OK) {
-        ESP_LOGE(TAG, "could get file for mp3id: %s", mp3_id);
-        return ESP_FAIL;
+    } else {
+        // read mp3 info from the mp3 DB
+        if (mp3db_file_for_id(mp3_id, current_playing_mp3_filepath,
+                              &current_playing_mp3_duration,
+                              &current_playing_mp3_avg_bitrate) != ESP_OK) {
+            ESP_LOGE(TAG, "could get file for mp3id: %s", mp3_id);
+            return ESP_FAIL;
+        }
     }
 
     if (playtime_seconds > 0) {
         ESP_LOGI(TAG, "seek to: %d, current time: %d", playtime_seconds, current_playing_mp3_time_seconds);
-        fatfs_byte_pos = (int64_t)playtime_seconds * (int64_t)file_avg_bitrate / 8;
+        fatfs_byte_pos = (int64_t)playtime_seconds * (int64_t)current_playing_mp3_avg_bitrate / 8;
     }
 
     // c. If the line data MP3 ID/time does not match, then switch to the indicated MP3 file/time and start playing.
     switch (state) {
         case AEL_STATE_INIT:
-            audio_element_set_uri(fatfs_stream_reader, filepath);
+            audio_element_set_uri(fatfs_stream_reader, current_playing_mp3_filepath);
             audio_element_set_byte_pos(fatfs_stream_reader, fatfs_byte_pos);
             audio_pipeline_run(pipeline_for_play);
             break;
@@ -323,7 +323,7 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
             audio_pipeline_reset_ringbuffer(pipeline_for_play);
             audio_pipeline_reset_elements(pipeline_for_play);
             audio_pipeline_change_state(pipeline_for_play, AEL_STATE_INIT);
-            audio_element_set_uri(fatfs_stream_reader, filepath);
+            audio_element_set_uri(fatfs_stream_reader, current_playing_mp3_filepath);
             audio_element_set_byte_pos(fatfs_stream_reader, fatfs_byte_pos);
             audio_pipeline_run(pipeline_for_play);
             break;
