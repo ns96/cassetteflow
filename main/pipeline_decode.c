@@ -304,7 +304,7 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     }
 
     if (playtime_seconds > 0) {
-        ESP_LOGI(TAG, "seek to: %d", playtime_seconds);
+        ESP_LOGI(TAG, "seek to: %d, current time: %d", playtime_seconds, current_playing_mp3_time_seconds);
         fatfs_byte_pos = (int64_t)playtime_seconds * (int64_t)file_avg_bitrate / 8;
     }
 
