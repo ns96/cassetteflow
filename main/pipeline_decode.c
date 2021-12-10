@@ -23,6 +23,8 @@
 
 static const char *TAG = "cf_pipeline_decode";
 
+#define USE_EQ  1
+
 #define PLAYBACK_RATE       48000
 
 // time in millis to wait for new data from minimodem before considering the tape is stopped
@@ -513,10 +515,7 @@ esp_err_t pipeline_decode_set_equalizer(int band_gain[10])
     esp_err_t ret = ESP_OK;
 
     for (int i = 0; i < 10; ++i) {
-        equalizer_band_gain[i] = band_gain[i];
-        equalizer_band_gain[i + 10] = band_gain[i];
-
-        if (pipeline_for_play != NULL) {
+        if (pipeline_for_play != NULL && equalizer != NULL) {
             ret = equalizer_set_gain_info(equalizer, i, band_gain[i], true);
             if (ret != ESP_OK) {
                 break;

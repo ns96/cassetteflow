@@ -128,9 +128,7 @@ void pipeline_handle_set(void)
     int bands[10] = {0}; // default EQ (off)
     static bool eq_active = false;
 
-    eq_active = !eq_active;
-
-    if (eq_active) {
+    if (!eq_active) {
         // read EQ preset from file
         ret = eq_read_from_file(filename, bands);
         if (ret != ESP_OK) {
@@ -142,6 +140,8 @@ void pipeline_handle_set(void)
         if (pipeline_decode_set_equalizer(bands) != ESP_OK) {
             ESP_LOGE(TAG, "Error setting EQ data");
         } else {
+            eq_active = !eq_active;
+
             // turn on green LED
             if (eq_active) {
                 led_eq_on();

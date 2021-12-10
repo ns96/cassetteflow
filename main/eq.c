@@ -15,7 +15,7 @@ static const char *TAG = "cf_eq";
 esp_err_t eq_read_from_file(const char *filepath, int bands[10])
 {
     FILE *fd = NULL;
-    esp_err_t ret = ESP_FAIL;
+    esp_err_t ret = ESP_OK;
 
     fd = fopen(filepath, "r");
     if (!fd) {
