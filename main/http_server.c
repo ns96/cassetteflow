@@ -9,6 +9,7 @@
 #include "tapefile.h"
 #include "raw_queue.h"
 #include <esp_http_server.h>
+#include "eq.h"
 
 static const char *TAG = "cf_http_server";
 
@@ -304,6 +305,49 @@ static esp_err_t handler_uri_stop(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t handler_uri_eq(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
+    size_t buf_len;
+    esp_err_t err = ESP_FAIL;
+    char param_eq[32] = "";
+    int bands[10] = {0};
+
+    /* Read URL query string length and allocate memory for length + 1,
+     * extra byte for null termination */
+    buf_len = httpd_req_get_url_query_len(req) + 1;
+    if (buf_len > 1) {
+        char *buf;
+        buf = malloc(buf_len);
+        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+            ESP_LOGI(TAG, "Found URL query => %s", buf);
+            /* Get value of expected key from query string */
+            if (httpd_query_key_value(buf, "band", param_eq, sizeof(param_eq)) == ESP_OK) {
+                ESP_LOGI(TAG, "Found URL query parameter => eq band=%s", param_eq);
+            }
+        }
+        free(buf);
+    }
+
+    //read and process band params
+    if (sscanf(param_eq, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d", &bands[0], &bands[1], &bands[2], &bands[3], &bands[4],
+               &bands[5], &bands[6], &bands[7], &bands[8], &bands[9]) == 10) {
+        err = eq_process_bands(bands);
+    } else {
+        err = ESP_FAIL;
+    }
+
+    if (err == ESP_OK) {
+        /* Respond with empty body */
+        httpd_resp_send(req, NULL, 0);
+    } else {
+        /* Respond with 500 Internal Server Error */
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to set EQ");
+    }
+    return ESP_OK;
+}
+
 static const httpd_uri_t uri_root = {
     .uri       = "/",
     .method    = HTTP_GET,
@@ -360,11 +404,19 @@ static const httpd_uri_t uri_stop = {
     .user_ctx  = NULL
 };
 
+static const httpd_uri_t uri_eq = {
+    .uri       = "/eq",
+    .method    = HTTP_GET,
+    .handler   = handler_uri_eq,
+    .user_ctx  = NULL
+};
+
 static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.lru_purge_enable = true;
+    config.max_uri_handlers = 16;
 
     // Start the httpd server
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
@@ -379,6 +431,7 @@ static httpd_handle_t start_webserver(void)
         httpd_register_uri_handler(server, &uri_create);
         httpd_register_uri_handler(server, &uri_start);
         httpd_register_uri_handler(server, &uri_stop);
+        httpd_register_uri_handler(server, &uri_eq);
         return server;
     }
 

@@ -8,5 +8,7 @@
 #include <esp_err.h>
 
 esp_err_t eq_read_from_file(const char *filepath, int bands[10]);
+esp_err_t eq_set_key_pressed(void);
+esp_err_t eq_process_bands(int bands[10]);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_EQ_H
