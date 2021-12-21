@@ -15,6 +15,8 @@ set(COMPONENT_SRCS
         led.c
         mp3info.c
         filter_line_reader.c
+        bt.c
+        pipeline_output.c
         volume.c
         )
 set(COMPONENT_ADD_INCLUDEDIRS .)

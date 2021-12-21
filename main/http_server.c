@@ -10,6 +10,8 @@
 #include "raw_queue.h"
 #include <esp_http_server.h>
 #include "eq.h"
+#include "pipeline_output.h"
+#include "board.h"
 #include "volume.h"
 
 static const char *TAG = "cf_http_server";
@@ -375,6 +377,52 @@ static esp_err_t handler_uri_eq(httpd_req_t *req)
     return ESP_OK;
 }
 
+{
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
+    size_t buf_len;
+    esp_err_t err = ESP_FAIL;
+    char param[32] = "";
+    char buff[255] = "Failed to set output";
+
+    /* Read URL query string length and allocate memory for length + 1,
+     * extra byte for null termination */
+    buf_len = httpd_req_get_url_query_len(req) + 1;
+    if (buf_len > 1) {
+        char *buf;
+        buf = malloc(buf_len);
+        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+            ESP_LOGI(TAG, "Found URL query => %s", buf);
+            /* Get value of expected key from query string */
+            if (httpd_query_key_value(buf, "device", param, sizeof(param)) == ESP_OK) {
+                ESP_LOGI(TAG, "Found URL query parameter => device=%s", param);
+                //check device param
+                if (strncmp(param, "BT", strlen("BT")) == 0) {
+                    err = pipeline_output_set_bt(buff, sizeof(buff));
+                } else if (strncmp(param, "SP", strlen("SP")) == 0) {
+                    err = pipeline_output_set_sp();
+                    if (err == ESP_OK) {
+                        //empty output string
+                        buff[0] = 0;
+                    }
+                } else {
+                    snprintf(buff, sizeof(buff),"Unknown output device => %s", param);
+                }
+            }
+        }
+        free(buf);
+    }
+    
+    if (err == ESP_OK) {
+        /* Respond with body */
+        httpd_resp_sendstr(req, buff);
+    } else {
+        /* Respond with 500 Internal Server Error */
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, buff);
+    }
+    return ESP_OK;
+}
+
 static esp_err_t handler_uri_vol(httpd_req_t *req)
 {
     char param[32] = {0};
@@ -465,6 +513,13 @@ static const httpd_uri_t uri_eq = {
     .user_ctx  = NULL
 };
 
+static const httpd_uri_t uri_output = {
+    .uri       = "/output",
+    .method    = HTTP_GET,
+    .handler   = handler_uri_output,
+    .user_ctx  = NULL
+};
+
 
 static const httpd_uri_t uri_vol = {
     .uri       = "/vol",
@@ -494,6 +549,7 @@ static httpd_handle_t start_webserver(void)
         httpd_register_uri_handler(server, &uri_start);
         httpd_register_uri_handler(server, &uri_stop);
         httpd_register_uri_handler(server, &uri_eq);
+        httpd_register_uri_handler(server, &uri_output);
         httpd_register_uri_handler(server, &uri_vol);
         return server;
     }

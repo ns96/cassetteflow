@@ -20,6 +20,8 @@
 #include "filter_line_reader.h"
 #include "mp3db.h"
 #include "raw_queue.h"
+#include "pipeline_output.h"
+#include "bt.h"
 
 static const char *TAG = "cf_pipeline_decode";
 
@@ -34,10 +36,10 @@ static const char *TAG = "cf_pipeline_decode";
 static audio_pipeline_handle_t pipeline_for_play = NULL;
 // record audio from line-in, decode with minimodem and output line by line (raw output)
 static audio_pipeline_handle_t pipeline_for_record = NULL;
-static audio_element_handle_t i2s_stream_writer = NULL, fatfs_stream_reader = NULL, mp3_decoder = NULL,
+static audio_element_handle_t output_stream_writer = NULL, fatfs_stream_reader = NULL, mp3_decoder = NULL,
     equalizer = NULL, resample_for_play = NULL;
 static audio_element_handle_t i2s_stream_reader = NULL, resample_for_record = NULL, minimodem_decoder = NULL,
-    filter_line_reader = NULL, raw_reader = NULL;
+    filter_line_reader = NULL;
 static audio_element_state_t el_state = AEL_STATE_STOPPED;
 // -13 dB is minimum. 0 - no gain.
 // The size of gain array should be the multiplication of NUMBER_BAND and number channels of audio stream data.
@@ -69,14 +71,8 @@ static esp_err_t create_playback_pipeline(void)
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "[1] Create i2s_stream_writer");
-    i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT();
-    i2s_cfg.type = AUDIO_STREAM_WRITER;
-    i2s_cfg.i2s_config.sample_rate = PLAYBACK_RATE;
-    i2s_cfg.task_core = 1;
-    i2s_stream_writer = i2s_stream_init(&i2s_cfg);
-    if (i2s_stream_writer == NULL) {
-        ESP_LOGE(TAG, "error init i2s_stream_writer");
+    char output_stream_name[10] = {0};
+    if (pipeline_output_init_stream(pipeline_for_play, &output_stream_writer, output_stream_name) == ESP_FAIL) {
         return ESP_FAIL;
     }
 
@@ -139,14 +135,14 @@ static esp_err_t create_playback_pipeline(void)
     audio_pipeline_register(pipeline_for_play, equalizer, "equalizer");
 #endif
     audio_pipeline_register(pipeline_for_play, resample_for_play, "resample");
-    audio_pipeline_register(pipeline_for_play, i2s_stream_writer, "i2s");
+    audio_pipeline_register(pipeline_for_play, output_stream_writer, output_stream_name);
 
-    ESP_LOGI(TAG, "[7] Link it together [sdcard]-->fatfs_stream-->mp3_decoder-->equalizer-->resample-->i2s_stream");
+    ESP_LOGI(TAG, "[7] Link it together [sdcard]-->fatfs_stream-->mp3_decoder-->equalizer-->resample-->%s", output_stream_name);
 #ifdef USE_EQ
-    const char *link_tag[5] = {"file_read", "mp3", "equalizer", "resample", "i2s"};
+    const char *link_tag[5] = {"file_read", "mp3", "equalizer", "resample", output_stream_name};
     audio_pipeline_link(pipeline_for_play, link_tag, 5);
 #else
-    const char *link_tag[4] = {"file_read", "mp3", "resample", "i2s"};
+    const char *link_tag[4] = {"file_read", "mp3", "resample", output_stream_name};
     audio_pipeline_link(pipeline_for_play, link_tag, 4);
 #endif
 
@@ -203,17 +199,6 @@ static esp_err_t create_record_pipeline(void)
         ESP_LOGE(TAG, "error init minimodem_decoder");
         return ESP_FAIL;
     }
-
-#if 0
-    ESP_LOGI(TAG, "[4] Create raw_reader");
-    raw_stream_cfg_t raw_asr_cfg = RAW_STREAM_CFG_DEFAULT();
-    raw_asr_cfg.type = AUDIO_STREAM_READER;
-    raw_reader = raw_stream_init(&raw_asr_cfg);
-    if (raw_reader == NULL) {
-        ESP_LOGE(TAG, "error init raw_reader");
-        return ESP_FAIL;
-    }
-#endif
 
     ESP_LOGI(TAG, "[4] Create filter_line_reader");
     filter_line_cfg_t line_reader_cfg = DEFAULT_FILTER_LINE_CONFIG();
@@ -280,7 +265,7 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
 
     int fatfs_byte_pos = 0; // start from the beginning by default
     int current_playing_mp3_time_seconds = 0;
-    audio_element_state_t state = audio_element_get_state(i2s_stream_writer);
+    audio_element_state_t state = audio_element_get_state(output_stream_writer);
     audio_element_info_t fatfs_music_info = {0};
     if (state == AEL_STATE_RUNNING) {
         // pipeline is playing, get current mp3 time
@@ -322,6 +307,7 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
             audio_pipeline_wait_for_stop(pipeline_for_play);
             /* fallthrough */
         case AEL_STATE_FINISHED:
+        case AEL_STATE_ERROR:
             audio_pipeline_reset_ringbuffer(pipeline_for_play);
             audio_pipeline_reset_elements(pipeline_for_play);
             audio_pipeline_change_state(pipeline_for_play, AEL_STATE_INIT);
@@ -343,7 +329,7 @@ static esp_err_t pipeline_decode_handle_no_line_data(void)
 {
     // d. If no line data is being received i.e. the cassette tape was stopped, then stop playback of the current MP3 and wait for more data.
 
-    audio_element_state_t state = audio_element_get_state(i2s_stream_writer);
+    audio_element_state_t state = audio_element_get_state(output_stream_writer);
     switch (state) {
         case AEL_STATE_NONE:
         case AEL_STATE_INIT:
@@ -391,6 +377,10 @@ esp_err_t pipeline_decode_start(audio_event_iface_handle_t evt)
     err = create_record_pipeline();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "error create_record_pipeline");
+        return ESP_FAIL;
+    }
+
+    if (pipeline_output_periph_start(evt) != ESP_OK) {
         return ESP_FAIL;
     }
 
@@ -460,6 +450,13 @@ esp_err_t pipeline_decode_event_loop(audio_event_iface_handle_t evt)
             ESP_LOGW(TAG, "[ * ] Stop event received");
             break;
         }
+
+        // process BT messages
+        if (msg.source_type == PERIPH_ID_BLUETOOTH) {
+            if (bt_process_events(msg) == 1) {
+                break;
+            }
+        }
     }
 
     return ESP_OK;
@@ -495,7 +492,7 @@ void pipeline_decode_status(char *buf, size_t buf_size)
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
     // state of playback
-    audio_element_state_t state = audio_element_get_state(i2s_stream_writer);
+    audio_element_state_t state = audio_element_get_state(output_stream_writer);
 
     if (state == AEL_STATE_RUNNING) {
         // returns “DECODE” and the current line record if playing
