@@ -15,6 +15,7 @@
 #include "tapedb.h"
 #include "eq.h"
 #include "led.h"
+#include "pipeline_playback.h"
 
 static const char *TAG = "cf_pipeline";
 
@@ -44,6 +45,8 @@ static void pipeline_event_handler(void *handler_args, esp_event_base_t base, in
         case PIPELINE_PASSTHROUGH_STARTED:
             pipeline_passthrough_event_loop(evt);
             break;
+        case PIPELINE_PLAYBACK_STARTED:
+            pipeline_playback_event_loop(evt);
             break;
     }
 }
@@ -85,6 +88,8 @@ void pipeline_handle_play(void)
         case MODE_PASSTHROUGH:
             pipeline_set_mode(MODE_DECODE);
             break;
+        case MODE_PLAYBACK:
+            break;
         default:
             assert(0);
             break;
@@ -112,6 +117,9 @@ void pipeline_set_mode(enum cf_mode mode)
         case MODE_PASSTHROUGH:
             pipeline_passthrough_stop();
             break;
+        case MODE_PLAYBACK:
+            pipeline_playback_stop();
+            break;
         default:
             assert(0);
             break;
@@ -127,6 +135,9 @@ void pipeline_set_mode(enum cf_mode mode)
             break;
         case MODE_PASSTHROUGH:
             pipeline_passthrough_start(evt);
+            break;
+        case MODE_PLAYBACK:
+            // nothing here, started with a separate command
             break;
         default:
             assert(0);
@@ -144,6 +155,9 @@ void pipeline_current_info_str(char *str, size_t str_len)
             break;
         case MODE_ENCODE:
             pipeline_encode_status(current_encoding_side, str, str_len);
+            break;
+        case MODE_PLAYBACK:
+            snprintf(str, str_len, "playback");
             break;
         case MODE_PASSTHROUGH:
             snprintf(str, str_len, "passthrough");
@@ -190,6 +204,18 @@ esp_err_t pipeline_stop_encoding()
     }
 }
 
+esp_err_t pipeline_start_playing(const char side)
+{
+    ESP_LOGI(TAG, "start_playing");
+
+    pipeline_set_mode(MODE_PLAYBACK);
+
+    if (!tapefile_is_present(side)) {
+        return ESP_FAIL;
+    }
+
+    return pipeline_playback_start(evt, tapefile_get_path(side));
+}
 
 esp_err_t pipeline_set_equalizer(int band_gain[10])
 {
@@ -233,6 +259,9 @@ esp_err_t pipeline_init(audio_event_iface_handle_t event_handle)
                                                              NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register_with(pipeline_event_loop, PIPELINE_EVENTS,
                                                              PIPELINE_PASSTHROUGH_STARTED, pipeline_event_handler,
+                                                             NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(pipeline_event_loop, PIPELINE_EVENTS,
+                                                             PIPELINE_PLAYBACK_STARTED, pipeline_event_handler,
                                                              NULL, NULL));
 
     if (pipeline_mode == MODE_DECODE) {

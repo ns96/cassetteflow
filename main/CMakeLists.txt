@@ -17,6 +17,7 @@ set(COMPONENT_SRCS
         filter_line_reader.c
         bt.c
         pipeline_output.c
+        pipeline_playback.c
         volume.c
         )
 set(COMPONENT_ADD_INCLUDEDIRS .)

@@ -19,6 +19,7 @@ enum
     PIPELINE_ENCODE_STARTED = 0,
     PIPELINE_DECODE_STARTED = 1,
     PIPELINE_PASSTHROUGH_STARTED = 2,
+    PIPELINE_PLAYBACK_STARTED = 3,
 };
 
 void pipeline_set_side(const char side);
@@ -31,5 +32,6 @@ esp_err_t pipeline_stop_encoding();
 esp_err_t pipeline_init(audio_event_iface_handle_t event_handle);
 esp_err_t pipeline_main(void);
 esp_err_t pipeline_set_equalizer(int band_gain[10]);
+esp_err_t pipeline_start_playing(const char side);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_PIPELINE_H

@@ -377,6 +377,7 @@ static esp_err_t handler_uri_eq(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t handler_uri_output(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
@@ -419,6 +420,33 @@ static esp_err_t handler_uri_eq(httpd_req_t *req)
     } else {
         /* Respond with 500 Internal Server Error */
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, buff);
+    }
+    return ESP_OK;
+}
+
+static esp_err_t handler_uri_play(httpd_req_t *req)
+{
+    char param[32] = {0};
+
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
+    esp_err_t err = ESP_FAIL;
+    err = read_param_from_req(req, "side", param, sizeof(param));
+    if (err == ESP_OK) {
+        if (strlen(param) == 1) {
+            const char side = toupper(param[0]);
+            pipeline_start_playing(side);
+        } else {
+            err = ESP_FAIL;
+        }
+    }
+
+    if (err == ESP_OK) {
+        /* Respond with empty body */
+        httpd_resp_send(req, NULL, 0);
+    } else {
+        /* Respond with 500 Internal Server Error */
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to start play");
     }
     return ESP_OK;
 }
@@ -520,6 +548,12 @@ static const httpd_uri_t uri_output = {
     .user_ctx  = NULL
 };
 
+static const httpd_uri_t uri_play = {
+    .uri       = "/play",
+    .method    = HTTP_GET,
+    .handler   = handler_uri_play,
+    .user_ctx  = NULL
+};
 
 static const httpd_uri_t uri_vol = {
     .uri       = "/vol",
@@ -550,6 +584,7 @@ static httpd_handle_t start_webserver(void)
         httpd_register_uri_handler(server, &uri_stop);
         httpd_register_uri_handler(server, &uri_eq);
         httpd_register_uri_handler(server, &uri_output);
+        httpd_register_uri_handler(server, &uri_play);
         httpd_register_uri_handler(server, &uri_vol);
         return server;
     }
