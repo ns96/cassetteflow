@@ -128,6 +128,8 @@ static esp_err_t handler_uri_root(httpd_req_t *req)
                     pipeline_set_mode(MODE_ENCODE);
                 } else if (strncmp(param, "decode", strlen("decode")) == 0) {
                     pipeline_set_mode(MODE_DECODE);
+                } else if (strncmp(param, "pass", strlen("pass")) == 0) {
+                    pipeline_set_mode(MODE_PASSTHROUGH);
                 }
             }
         }

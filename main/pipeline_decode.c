@@ -41,7 +41,7 @@ static audio_element_handle_t i2s_stream_reader = NULL, resample_for_record = NU
 static audio_element_state_t el_state = AEL_STATE_STOPPED;
 // -13 dB is minimum. 0 - no gain.
 // The size of gain array should be the multiplication of NUMBER_BAND and number channels of audio stream data.
-static int equalizer_band_gain[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int equalizer_band_gain[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 static char current_playing_mp3_id[11] = {0};
 static char current_playing_mp3_filepath[256];

@@ -21,14 +21,6 @@ enum
     PIPELINE_PASSTHROUGH_STARTED = 2,
 };
 
-enum cf_pipeline_decode_mode
-{
-    // play the mp3 file indicated by the data read from the cassette tape
-    PIPELINE_DECODE_MODE_DEFAULT = 0,
-    // output the raw audio data from cassette to the headphone output
-    PIPELINE_DECODE_MODE_PASSTHROUGH = 1,
-};
-
 void pipeline_set_side(const char side);
 void pipeline_handle_play(void);
 void pipeline_handle_set(void);
@@ -38,5 +30,6 @@ esp_err_t pipeline_start_encoding(char side);
 esp_err_t pipeline_stop_encoding();
 esp_err_t pipeline_init(audio_event_iface_handle_t event_handle);
 esp_err_t pipeline_main(void);
+esp_err_t pipeline_set_equalizer(int band_gain[10]);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_PIPELINE_H

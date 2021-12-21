@@ -24,7 +24,6 @@ esp_event_loop_handle_t pipeline_event_loop;
 ESP_EVENT_DEFINE_BASE(PIPELINE_EVENTS);
 
 static enum cf_mode pipeline_mode = MODE_DECODE;
-static enum cf_pipeline_decode_mode pipeline_decode_mode = PIPELINE_DECODE_MODE_DEFAULT;
 static char current_encoding_side;
 static audio_event_iface_handle_t evt;
 
@@ -45,29 +44,6 @@ static void pipeline_event_handler(void *handler_args, esp_event_base_t base, in
         case PIPELINE_PASSTHROUGH_STARTED:
             pipeline_passthrough_event_loop(evt);
             break;
-    }
-}
-
-static void pipeline_start_decoding(void)
-{
-    switch (pipeline_decode_mode) {
-        case PIPELINE_DECODE_MODE_DEFAULT:
-            pipeline_decode_start(evt);
-            break;
-        case PIPELINE_DECODE_MODE_PASSTHROUGH:
-            pipeline_passthrough_start(evt);
-            break;
-    }
-}
-
-static void pipeline_stop_decoding(void)
-{
-    switch (pipeline_decode_mode) {
-        case PIPELINE_DECODE_MODE_DEFAULT:
-            pipeline_decode_stop();
-            break;
-        case PIPELINE_DECODE_MODE_PASSTHROUGH:
-            pipeline_passthrough_stop();
             break;
     }
 }
@@ -91,13 +67,7 @@ void pipeline_handle_play(void)
             // indicated by the data read from the cassette tape (default),
             // or outputting the raw audio data from cassette to the headphone output.
             // It does not control the playback of mp3 files.
-            pipeline_stop_decoding();
-            if (pipeline_decode_mode == PIPELINE_DECODE_MODE_DEFAULT) {
-                pipeline_decode_mode = PIPELINE_DECODE_MODE_PASSTHROUGH;
-            } else {
-                pipeline_decode_mode = PIPELINE_DECODE_MODE_DEFAULT;
-            }
-            pipeline_start_decoding();
+            pipeline_set_mode(MODE_PASSTHROUGH);
             break;
         case MODE_ENCODE:
             // In ENCODE mode, pressing it will stop the encoding process, just like sending the “STOP” command,
@@ -112,6 +82,12 @@ void pipeline_handle_play(void)
                 }
             }
             break;
+        case MODE_PASSTHROUGH:
+            pipeline_set_mode(MODE_DECODE);
+            break;
+        default:
+            assert(0);
+            break;
     }
 }
 
@@ -125,18 +101,36 @@ void pipeline_set_mode(enum cf_mode mode)
 {
     ESP_LOGI(TAG, "set_mode: %d", mode);
 
-    if (mode == pipeline_mode) {
-        ESP_LOGI(TAG, "already in mode: %d", mode);
-        return;
+    //stop current mode
+    switch (pipeline_mode) {
+        case MODE_DECODE:
+            pipeline_decode_stop();
+            break;
+        case MODE_ENCODE:
+            pipeline_stop_encoding();
+            break;
+        case MODE_PASSTHROUGH:
+            pipeline_passthrough_stop();
+            break;
+        default:
+            assert(0);
+            break;
     }
 
-    //stop current mode
-    if (pipeline_mode == MODE_DECODE) {
-        pipeline_stop_decoding();
-    } else {
-        pipeline_stop_encoding();
-        // start MODE_DECODE
-        pipeline_start_decoding();
+    //start new mode
+    switch (mode) {
+        case MODE_DECODE:
+            pipeline_decode_start(evt);
+            break;
+        case MODE_ENCODE:
+            // nothing here, started with a separate command
+            break;
+        case MODE_PASSTHROUGH:
+            pipeline_passthrough_start(evt);
+            break;
+        default:
+            assert(0);
+            break;
     }
 
     pipeline_mode = mode;
@@ -150,6 +144,12 @@ void pipeline_current_info_str(char *str, size_t str_len)
             break;
         case MODE_ENCODE:
             pipeline_encode_status(current_encoding_side, str, str_len);
+            break;
+        case MODE_PASSTHROUGH:
+            snprintf(str, str_len, "passthrough");
+            break;
+        default:
+            assert(0);
             break;
     }
 }
@@ -169,15 +169,9 @@ esp_err_t pipeline_start_encoding(const char side)
     snprintf(file_uri, sizeof(file_uri), "file:/%s", tapefile_get_path(side));
 
     // switch to ENCODE mode if needed
-    if (pipeline_mode != MODE_ENCODE) {
-        pipeline_set_mode(MODE_ENCODE);
-    }
+    pipeline_set_mode(MODE_ENCODE);
 
-    if (pipeline_mode == MODE_ENCODE) {
-        return pipeline_encode_start(evt, file_uri);
-    } else {
-        return ESP_FAIL;
-    }
+    return pipeline_encode_start(evt, file_uri);
 }
 
 /**
@@ -195,6 +189,27 @@ esp_err_t pipeline_stop_encoding()
         return ESP_FAIL;
     }
 }
+
+
+esp_err_t pipeline_set_equalizer(int band_gain[10])
+{
+    switch (pipeline_mode) {
+        case MODE_DECODE:
+            return pipeline_decode_set_equalizer(band_gain);
+        case MODE_ENCODE:
+            break;
+        case MODE_PASSTHROUGH:
+            return pipeline_passthrough_set_equalizer(band_gain);
+            break;
+        case MODE_PLAYBACK:
+            break;
+        default:
+            assert(0);
+            break;
+    }
+    return ESP_OK;
+}
+
 
 esp_err_t pipeline_init(audio_event_iface_handle_t event_handle)
 {
@@ -221,7 +236,7 @@ esp_err_t pipeline_init(audio_event_iface_handle_t event_handle)
                                                              NULL, NULL));
 
     if (pipeline_mode == MODE_DECODE) {
-        pipeline_start_decoding();
+        pipeline_decode_start(evt);
     }
 
     return evt != NULL ? ESP_OK : ESP_FAIL;

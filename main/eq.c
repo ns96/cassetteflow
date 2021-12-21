@@ -7,7 +7,7 @@
 #include "led.h"
 #include "internal.h"
 #include <audio_event_iface.h>
-#include "pipeline_decode.h"
+#include "pipeline.h"
 
 static const char *TAG = "cf_eq";
 static bool eq_active = false;
@@ -71,7 +71,7 @@ esp_err_t eq_set_key_pressed(void)
  */
 esp_err_t eq_process_bands(int bands[10])
 {
-    if (pipeline_decode_set_equalizer(bands) != ESP_OK) {
+    if (pipeline_set_equalizer(bands) != ESP_OK) {
         ESP_LOGE(TAG, "Error setting EQ data");
         return ESP_FAIL;
     }

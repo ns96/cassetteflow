@@ -7,8 +7,14 @@
 
 enum cf_mode
 {
+    // play the mp3 file indicated by the data read from the cassette tape
     MODE_DECODE = 0,
+    // encode data
     MODE_ENCODE = 1,
+    // output the raw audio data from cassette to the headphone output
+    MODE_PASSTHROUGH = 2,
+    // play mp3 files as indicated by sideA.txt
+    MODE_PLAYBACK = 3,
 };
 
 #define FILENAME_SIDE_A     "/sdcard/sideA.txt"

@@ -11,5 +11,6 @@
 esp_err_t pipeline_passthrough_start(audio_event_iface_handle_t evt);
 esp_err_t pipeline_passthrough_event_loop(audio_event_iface_handle_t evt);
 esp_err_t pipeline_passthrough_stop(void);
+esp_err_t pipeline_passthrough_set_equalizer(int band_gain[10]);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_PIPELINE_PASSTHROUGH_H
