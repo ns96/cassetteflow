@@ -20,6 +20,8 @@
 
 static const char *TAG = "cf_main";
 
+audio_board_handle_t board_handle;
+
 #ifdef CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
 static int tasks_info(void)
 {
@@ -186,7 +188,7 @@ void app_main(void)
     ESP_ERROR_CHECK(mp3db_scan());
 
     ESP_LOGI(TAG, "[ 2 ] Init board");
-    audio_board_handle_t board_handle = audio_board_init();
+    board_handle = audio_board_init();
     audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH,
                          AUDIO_HAL_CTRL_START);
 

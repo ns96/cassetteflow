@@ -10,6 +10,7 @@
 #include "raw_queue.h"
 #include <esp_http_server.h>
 #include "eq.h"
+#include "volume.h"
 
 static const char *TAG = "cf_http_server";
 
@@ -19,6 +20,30 @@ static const char *TAG = "cf_http_server";
 static char http_scratch_buffer[SCRATCH_BUFSIZE];
 
 static httpd_handle_t httpd_server = NULL;
+
+static esp_err_t read_param_from_req(httpd_req_t *req, const char *param_name, char *output, size_t output_length)
+{
+    size_t buf_len;
+    esp_err_t err = ESP_FAIL;
+
+    /* Read URL query string length and allocate memory for length + 1,
+     * extra byte for null termination */
+    buf_len = httpd_req_get_url_query_len(req) + 1;
+    if (buf_len > 1) {
+        char *buf;
+        buf = malloc(buf_len);
+        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+            ESP_LOGI(TAG, "Found URL query => %s", buf);
+            /* Get value of expected key from query string */
+            if (httpd_query_key_value(buf, param_name, output, output_length) == ESP_OK) {
+                ESP_LOGI(TAG, "Found URL query parameter => %s=%s", param_name, output);
+                err = ESP_OK;
+            }
+        }
+        free(buf);
+    }
+    return err;
+}
 
 static esp_err_t http_respond_file(httpd_req_t *req, const char *filepath)
 {
@@ -348,6 +373,33 @@ static esp_err_t handler_uri_eq(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t handler_uri_vol(httpd_req_t *req)
+{
+    char param[32] = {0};
+
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
+    esp_err_t err = ESP_FAIL;
+    err = read_param_from_req(req, "value", param, sizeof(param));
+    if (err == ESP_OK) {
+        long value = strtol(param, NULL, 10);
+        if ((value != LONG_MAX) && (value != LONG_MIN)) {
+            err = volume_set((int)value);
+        } else {
+            err = ESP_FAIL;
+        }
+    }
+
+    if (err == ESP_OK) {
+        /* Respond with empty body */
+        httpd_resp_send(req, NULL, 0);
+    } else {
+        /* Respond with 500 Internal Server Error */
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to set volume");
+    }
+    return ESP_OK;
+}
+
 static const httpd_uri_t uri_root = {
     .uri       = "/",
     .method    = HTTP_GET,
@@ -411,6 +463,14 @@ static const httpd_uri_t uri_eq = {
     .user_ctx  = NULL
 };
 
+
+static const httpd_uri_t uri_vol = {
+    .uri       = "/vol",
+    .method    = HTTP_GET,
+    .handler   = handler_uri_vol,
+    .user_ctx  = NULL
+};
+
 static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
@@ -432,6 +492,7 @@ static httpd_handle_t start_webserver(void)
         httpd_register_uri_handler(server, &uri_start);
         httpd_register_uri_handler(server, &uri_stop);
         httpd_register_uri_handler(server, &uri_eq);
+        httpd_register_uri_handler(server, &uri_vol);
         return server;
     }
 

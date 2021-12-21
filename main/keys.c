@@ -8,6 +8,7 @@
 #include <input_key_service.h>
 #include "keys.h"
 #include "pipeline.h"
+#include "volume.h"
 
 static const char *TAG = "cf_keys";
 
@@ -17,8 +18,6 @@ static esp_err_t input_key_service_cb(periph_service_handle_t handle, periph_ser
 {
     /* Handle key events to start, pause, resume, finish current song and adjust volume */
     audio_board_handle_t board_handle = (audio_board_handle_t)ctx;
-    int player_volume;
-    audio_hal_get_volume(board_handle->audio_hal, &player_volume);
 
     if (evt->type == INPUT_KEY_SERVICE_ACTION_CLICK_RELEASE) {
         ESP_LOGD(TAG, "[ * ] input key id is %d", (int)evt->data);
@@ -41,21 +40,11 @@ static esp_err_t input_key_service_cb(periph_service_handle_t handle, periph_ser
                 break;
             case INPUT_KEY_USER_ID_VOLUP:
                 ESP_LOGI(TAG, "[ * ] [Vol+] input key event");
-                player_volume += 10;
-                if (player_volume > 100) {
-                    player_volume = 100;
-                }
-                audio_hal_set_volume(board_handle->audio_hal, player_volume);
-                ESP_LOGI(TAG, "[ * ] Volume set to %d %%", player_volume);
+                volume_set(10);
                 break;
             case INPUT_KEY_USER_ID_VOLDOWN:
                 ESP_LOGI(TAG, "[ * ] [Vol-] input key event");
-                player_volume -= 10;
-                if (player_volume < 0) {
-                    player_volume = 0;
-                }
-                audio_hal_set_volume(board_handle->audio_hal, player_volume);
-                ESP_LOGI(TAG, "[ * ] Volume set to %d %%", player_volume);
+                volume_set(-10);
                 break;
         }
     }
