@@ -26,7 +26,7 @@ ESP_EVENT_DEFINE_BASE(PIPELINE_EVENTS);
 
 static enum cf_mode pipeline_mode = MODE_DECODE;
 static char current_encoding_side;
-static audio_event_iface_handle_t evt;
+audio_event_iface_handle_t evt;
 
 static void pipeline_event_handler(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
 {
@@ -213,7 +213,6 @@ esp_err_t pipeline_start_playing(const char side)
     if (!tapefile_is_present(side)) {
         return ESP_FAIL;
     }
-
     return pipeline_playback_start(evt, tapefile_get_path(side));
 }
 
@@ -279,5 +278,54 @@ esp_err_t pipeline_main(void)
 {
     // delay 1 second
     vTaskDelay(pdMS_TO_TICKS(1000));
+    //ESP_LOGI(TAG, "Still online, free mem : %d", xPortGetFreeHeapSize());
     return ESP_OK;
+}
+
+esp_err_t pipeline_set_output_bt(bool enable, const char *device, size_t device_len)
+{
+    switch (pipeline_mode) {
+        case MODE_DECODE:
+            return pipeline_decode_set_output_bt(enable, device, device_len);
+        case MODE_ENCODE:
+            break;
+        case MODE_PASSTHROUGH:
+            break;
+        case MODE_PLAYBACK:
+            return pipeline_playback_set_output_bt(enable, device, device_len);
+        default:
+            assert(0);
+            break;
+    }
+    return ESP_OK;
+}
+
+void pipeline_unpause(void)
+{
+    switch (pipeline_mode) {
+        case MODE_DECODE:
+            pipeline_decode_unpause();
+            break;
+        case MODE_PLAYBACK:
+            pipeline_playback_unpause();
+            break;
+        default:
+            assert(0);
+            break;
+    }
+}
+
+void pipeline_pause(void)
+{
+    switch (pipeline_mode) {
+        case MODE_DECODE:
+            pipeline_decode_pause();
+            break;
+        case MODE_PLAYBACK:
+            pipeline_playback_pause();
+            break;
+        default:
+            assert(0);
+            break;
+    }
 }

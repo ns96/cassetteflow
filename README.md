@@ -2,7 +2,7 @@
 
 ## Initial setup
 
-1. [Setup ESP-IDF](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/index.html#step-1-set-up-esp-idf), use ESP-IDF [v4.3.1](https://github.com/espressif/esp-idf/releases/tag/v4.3.1)
+1. [Setup ESP-IDF](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/index.html#step-1-set-up-esp-idf), use ESP-IDF [v4.3.2](https://github.com/espressif/esp-idf/releases/tag/v4.3.2)
 2. [Setup ESP-ADF](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/index.html#step-2-get-esp-adf), use latest master version
 3. Patch ESP-ADF to enable audio capture from AUX_IN input. In file `esp-adf/components/audio_board/lyrat_v4_3/board_def.h` change line 49 from:
 
@@ -14,6 +14,9 @@ to
 .adc_input  = AUDIO_HAL_ADC_INPUT_LINE2,        \
 ````
 
+## Note: After updating git repositories(ESP-IDF or ESP-ADF) or change branch you need update submodules:
+In cloned repository directory execute command: `git submodule update --init --recursive` and rebuild project.
+ 
 ## Wi-Fi configuration
 
 1. Create wifi_config.txt in the root of the SD card
@@ -59,3 +62,11 @@ CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y
 
 ## ESP32 LyraT 4.3 board
 1. AUX_IN audio quality issue - https://esp32.com/viewtopic.php?t=12407
+
+## Connect to bluetooth device
+- Get list of aviable bluetooth devices
+HTTP URL: `http://lyra.board.ip/output?device=BT`
+- Switch output to bluetooth and connect to device 'devicename', 
+HTTP URL: `http://lyra.board.ip/output?device=BT&btdevice=devicename`
+
+- Switch output to line out, HTTP URL: `http://lyra.board.ip/output?device=SP`

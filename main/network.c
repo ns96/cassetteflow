@@ -17,6 +17,7 @@
 static const char *TAG = "cf_network";
 
 static esp_periph_handle_t wifi_handle;
+extern esp_periph_set_handle_t set;
 
 /**
  * Read wifi configuration from file
@@ -59,8 +60,8 @@ esp_err_t network_connect(void)
 
     ESP_LOGI(TAG, "connect");
 
-    esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
-    esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
+//    esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
+ //   esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
 
     if (network_read_config(wifi_ssid, wifi_password) == 0) {
         wifi_cfg.ssid = wifi_ssid;

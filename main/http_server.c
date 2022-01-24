@@ -13,6 +13,8 @@
 #include "pipeline_output.h"
 #include "board.h"
 #include "volume.h"
+#include "bt.h"
+#include <ctype.h>
 
 static const char *TAG = "cf_http_server";
 
@@ -45,6 +47,53 @@ static esp_err_t read_param_from_req(httpd_req_t *req, const char *param_name, c
         free(buf);
     }
     return err;
+}
+
+/**
+ * Decode URL string.
+ * https://github.com/swarajsatvaya/UrlDecoder-C
+ * @param str source string
+ * @return Allocated in memory string. Must be free after use
+ */
+static char *urlDecode(const char *str) {
+    //int d = 0; /* whether or not the string is decoded */
+
+    char *dStr = (char *) malloc(strlen(str) + 1);
+    char eStr[] = "00"; /* for a hex code */
+
+    strcpy(dStr, str);
+
+    //while(!d) {
+    //d = 1;
+    int i; /* the counter for the string */
+
+    for(i=0;i<strlen(dStr);++i) {
+
+        if(dStr[i] == '%') {
+            if(dStr[i+1] == 0)
+                return dStr;
+
+            if(isxdigit(dStr[i+1]) && isxdigit(dStr[i+2])) {
+
+                //d = 0;
+
+                /* combine the next to numbers into one */
+                eStr[0] = dStr[i+1];
+                eStr[1] = dStr[i+2];
+
+                /* convert it to decimal */
+                long int x = strtol(eStr, NULL, 16);
+
+                /* remove the hex */
+                memmove(&dStr[i+1], &dStr[i+3], strlen(&dStr[i+3])+1);
+
+                dStr[i] = x;
+            }
+        }
+        else if(dStr[i] == '+') { dStr[i] = ' '; }
+    }
+    //}
+    return dStr;
 }
 
 static esp_err_t http_respond_file(httpd_req_t *req, const char *filepath)
@@ -187,12 +236,12 @@ static esp_err_t handler_uri_raw(httpd_req_t *req)
 
     httpd_resp_set_type(req, "text/plain");
 
-    raw_queue_reset();
+    raw_queue_reset(0);
 
     while (ret == ESP_OK) {
         // read current line (up to 10 seconds)
         raw_queue_message_t msg;
-        ret = raw_queue_get(&msg, pdMS_TO_TICKS(10 * 1000));
+        ret = raw_queue_get(0, &msg, pdMS_TO_TICKS(10 * 1000));
         if (ret == ESP_OK) {
             // send one line at a time
             strncat(msg.line, "\n", sizeof(msg.line) - 1);
@@ -384,7 +433,10 @@ static esp_err_t handler_uri_output(httpd_req_t *req)
     size_t buf_len;
     esp_err_t err = ESP_FAIL;
     char param[32] = "";
-    char buff[255] = "Failed to set output";
+    char response_buff[255] = {0};
+    esp_err_t ret = ESP_OK;
+
+    httpd_resp_set_type(req, "text/plain");
 
     /* Read URL query string length and allocate memory for length + 1,
      * extra byte for null termination */
@@ -392,34 +444,67 @@ static esp_err_t handler_uri_output(httpd_req_t *req)
     if (buf_len > 1) {
         char *buf;
         buf = malloc(buf_len);
-        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
-            ESP_LOGI(TAG, "Found URL query => %s", buf);
-            /* Get value of expected key from query string */
-            if (httpd_query_key_value(buf, "device", param, sizeof(param)) == ESP_OK) {
-                ESP_LOGI(TAG, "Found URL query parameter => device=%s", param);
-                //check device param
-                if (strncmp(param, "BT", strlen("BT")) == 0) {
-                    err = pipeline_output_set_bt(buff, sizeof(buff));
-                } else if (strncmp(param, "SP", strlen("SP")) == 0) {
-                    err = pipeline_output_set_sp();
-                    if (err == ESP_OK) {
-                        //empty output string
-                        buff[0] = 0;
-                    }
-                } else {
-                    snprintf(buff, sizeof(buff),"Unknown output device => %s", param);
-                }
-            }
+        if (httpd_req_get_url_query_str(req, buf, buf_len) != ESP_OK) {
+            goto exit;
         }
-        free(buf);
+        ESP_LOGI(TAG, "Found URL query => %s", buf);
+        /* Get value of expected key from query string */
+        if (httpd_query_key_value(buf, "device", param, sizeof(param)) != ESP_OK) {
+            snprintf(response_buff, sizeof(response_buff),"Parameter 'device' not found");
+            goto exit;
+        }
+
+        ESP_LOGI(TAG, "Found URL query parameter => device=%s", param);
+        //check device param
+        if (strncmp(param, "BT", strlen("BT")) == 0) {
+
+            //if set `btdevice` connect to it
+            if (httpd_query_key_value(buf, "btdevice", param, sizeof(param)) == ESP_OK) {
+                char *device;
+                device = urlDecode(param);
+                ESP_LOGI(TAG, "Decoded device name => %s", device);
+                err = pipeline_set_output_bt(true, device, strlen(device) + 1);
+                free(device);
+                if (err != ESP_OK){
+                    snprintf(response_buff, sizeof(response_buff),"Failed connect to device => %s", param);
+                }
+            } else {
+                //get devices list
+                raw_queue_reset(1);
+                err = bt_get_devices_list();
+                if (err != ESP_OK) {
+                    goto exit;
+                }
+                while (ret == ESP_OK) {
+                    // read current line (up to 5 seconds)
+                    raw_queue_message_t msg;
+                    ret = raw_queue_get(1, &msg, pdMS_TO_TICKS(5 * 1000));
+                    if (ret == ESP_OK) {
+                        // send one line at a time
+                        strncat(msg.line, "\n", sizeof(msg.line) - 1);
+                        ret = httpd_resp_send_chunk(req, msg.line, HTTPD_RESP_USE_STRLEN);
+                    }
+                }
+                httpd_resp_send_chunk(req, NULL, 0);
+                goto exit;
+            }
+        } else if (strncmp(param, "SP", strlen("SP")) == 0) {
+            err = pipeline_set_output_bt(false, NULL, 0);
+            if (err != ESP_OK) {
+                snprintf(response_buff, sizeof(response_buff),"Failed to set output to SP");
+            }
+        } else {
+            snprintf(response_buff, sizeof(response_buff),"Unknown output device => %s", param);
+        }
+        exit:        free(buf);
     }
     
     if (err == ESP_OK) {
         /* Respond with body */
-        httpd_resp_sendstr(req, buff);
+        httpd_resp_sendstr(req, response_buff);
     } else {
         /* Respond with 500 Internal Server Error */
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, buff);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, response_buff);
     }
     return ESP_OK;
 }

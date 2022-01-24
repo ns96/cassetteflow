@@ -10,5 +10,8 @@ esp_err_t pipeline_decode_event_loop(audio_event_iface_handle_t evt);
 esp_err_t pipeline_decode_stop(void);
 void pipeline_decode_status(char *buf, size_t buf_size);
 esp_err_t pipeline_decode_set_equalizer(int band_gain[10]);
+esp_err_t pipeline_decode_set_output_bt(bool enable, const char *device, size_t device_len);
+void pipeline_decode_unpause(void);
+void pipeline_decode_pause(void);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_PIPELINE_DECODE_H

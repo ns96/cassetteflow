@@ -6,27 +6,27 @@
 #include <freertos/queue.h>
 #include "raw_queue.h"
 
-static QueueHandle_t queue = NULL;
+static QueueHandle_t queue[2] = {NULL, NULL};
 
-esp_err_t raw_queue_init(void)
+esp_err_t raw_queue_init(int index)
 {
-    queue = xQueueCreate(5, sizeof(raw_queue_message_t));
+    queue[index] = xQueueCreate(5, sizeof(raw_queue_message_t));
 
-    return queue != 0 ? ESP_OK : ESP_FAIL;
+    return queue[index] != 0 ? ESP_OK : ESP_FAIL;
 }
 
 /**
  * Reset queue to empty state
  * @return
  */
-void raw_queue_reset(void)
+void raw_queue_reset(int index)
 {
-    xQueueReset(queue);
+    xQueueReset(queue[index]);
 }
 
-esp_err_t raw_queue_send(raw_queue_message_t *msg)
+esp_err_t raw_queue_send(int index, raw_queue_message_t *msg)
 {
-    return xQueueSendToBack(queue, msg, 0) == pdPASS ? ESP_OK : ESP_FAIL;
+    return xQueueSendToBack(queue[index], msg, 0) == pdPASS ? ESP_OK : ESP_FAIL;
 }
 
 /**
@@ -35,7 +35,7 @@ esp_err_t raw_queue_send(raw_queue_message_t *msg)
  * @param timeout_ticks
  * @return ESP_OK is message read
  */
-esp_err_t raw_queue_get(raw_queue_message_t *msg, int timeout_ticks)
+esp_err_t raw_queue_get(int index, raw_queue_message_t *msg, int timeout_ticks)
 {
-    return xQueueReceive(queue, msg, timeout_ticks) == pdTRUE ? ESP_OK : ESP_FAIL;
+    return xQueueReceive(queue[index], msg, timeout_ticks) == pdTRUE ? ESP_OK : ESP_FAIL;
 }

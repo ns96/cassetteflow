@@ -37,7 +37,8 @@ static const char *TAG = "cf_pipeline_playback";
 // playback of mp3 files from sd card with equalizer
 static audio_pipeline_handle_t pipeline_for_play = NULL;
 
-static audio_element_handle_t output_stream_writer = NULL, fatfs_stream_reader = NULL, mp3_decoder = NULL,
+static audio_element_handle_t *output_stream_writer = NULL;
+static audio_element_handle_t fatfs_stream_reader = NULL, mp3_decoder = NULL,
     equalizer = NULL, resample_for_play = NULL;
 
 static audio_element_state_t el_state = AEL_STATE_STOPPED;
@@ -113,7 +114,11 @@ static esp_err_t create_playback_pipeline(void)
     rsp_filter_cfg_t rsp_cfg = DEFAULT_RESAMPLE_FILTER_CONFIG();
     rsp_cfg.src_rate = PLAYBACK_RATE;
     rsp_cfg.src_ch = 2;
-    rsp_cfg.dest_rate = PLAYBACK_RATE;
+    if (output_is_bt) {
+        rsp_cfg.dest_rate = 44100;
+    } else {
+        rsp_cfg.dest_rate = PLAYBACK_RATE;
+    }
     rsp_cfg.dest_ch = 2;
     rsp_cfg.mode = RESAMPLE_DECODE_MODE;
     rsp_cfg.complexity = 0;
@@ -126,7 +131,7 @@ static esp_err_t create_playback_pipeline(void)
     }
 
     char output_stream_name[10] = {0};
-    if (pipeline_output_init_stream(pipeline_for_play, &output_stream_writer, output_stream_name) == ESP_FAIL) {
+    if (pipeline_output_init_stream(&output_stream_writer, output_stream_name) == ESP_FAIL) {
         return ESP_FAIL;
     }
 
@@ -137,9 +142,9 @@ static esp_err_t create_playback_pipeline(void)
     audio_pipeline_register(pipeline_for_play, equalizer, "equalizer");
 #endif
     audio_pipeline_register(pipeline_for_play, resample_for_play, "resample");
-    audio_pipeline_register(pipeline_for_play, output_stream_writer, output_stream_name);
+    audio_pipeline_register(pipeline_for_play, *output_stream_writer, output_stream_name);
 
-    ESP_LOGI(TAG, "[7] Link it together [sdcard]-->fatfs_stream-->mp3_decoder-->equalizer-->resample-->%s_stream", output_stream_name);
+    ESP_LOGI(TAG, "[7] Link it together [sdcard]-->fatfs_stream-->mp3_decoder-->equalizer-->resample--> %s stream", output_stream_name);
 #ifdef USE_EQ
     const char *link_tag[5] = {"file_read", "mp3", "equalizer", "resample", output_stream_name};
     audio_pipeline_link(pipeline_for_play, link_tag, 5);
@@ -162,7 +167,7 @@ static esp_err_t pipeline_playback_handle_line(const char *line)
 
     raw_queue_message_t msg;
     strcpy(msg.line, line);
-    raw_queue_send(&msg);
+    raw_queue_send(0, &msg);
 
     if (line_len != TAPEFILE_LINE_LENGTH) {
         ESP_LOGE(TAG, "unexpected line_len: %zu", line_len);
@@ -201,8 +206,9 @@ static esp_err_t pipeline_playback_handle_line(const char *line)
 
     int fatfs_byte_pos = 0; // start from the beginning by default
     int current_playing_mp3_time_seconds = 0;
-    audio_element_state_t state = audio_element_get_state(output_stream_writer);
+    audio_element_state_t state = audio_element_get_state(*output_stream_writer);
     audio_element_info_t fatfs_music_info = {0};
+
     if (state == AEL_STATE_RUNNING) {
         // pipeline is playing, get current mp3 time
         audio_element_getinfo(fatfs_stream_reader, &fatfs_music_info);
@@ -260,40 +266,6 @@ static esp_err_t pipeline_playback_handle_line(const char *line)
     return ESP_OK;
 }
 
-static esp_err_t pipeline_playback_handle_no_line_data(void)
-{
-    // d. If no line data is being received i.e. the cassette tape was stopped, then stop playback of the current MP3 and wait for more data.
-
-    audio_element_state_t state = audio_element_get_state(output_stream_writer);
-    switch (state) {
-        case AEL_STATE_NONE:
-        case AEL_STATE_INIT:
-            /* nothing to do here */
-            break;
-        case AEL_STATE_INITIALIZING:
-        case AEL_STATE_RUNNING:
-        case AEL_STATE_PAUSED:
-            audio_pipeline_stop(pipeline_for_play);
-            audio_pipeline_wait_for_stop(pipeline_for_play);
-            /* fallthrough */
-        case AEL_STATE_STOPPED:
-        case AEL_STATE_FINISHED:
-        case AEL_STATE_ERROR:
-            audio_pipeline_reset_ringbuffer(pipeline_for_play);
-            audio_pipeline_reset_elements(pipeline_for_play);
-            audio_pipeline_change_state(pipeline_for_play, AEL_STATE_INIT);
-            break;
-        default:
-            ESP_LOGE(TAG, "pipeline_playback_handle_no_line_data: unhandled state %d", state);
-            break;
-    }
-
-    // reset current playing info
-    current_playing_mp3_id[0] = 0;
-
-    return ESP_OK;
-}
-
 static void periodic_timer_callback(void* arg)
 {
     char line[128] = {0};
@@ -342,10 +314,6 @@ esp_err_t pipeline_playback_start(audio_event_iface_handle_t evt, const char *fi
     err = create_playback_pipeline();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "error create_playback_pipeline");
-        return ESP_FAIL;
-    }
-
-    if (pipeline_output_periph_start(evt) != ESP_OK) {
         return ESP_FAIL;
     }
 
@@ -425,11 +393,9 @@ esp_err_t pipeline_playback_stop(void)
         periodic_timer = NULL;
     }
 
-    if (pipeline_for_play != NULL) {
-        audio_pipeline_stop(pipeline_for_play);
-        audio_pipeline_wait_for_stop(pipeline_for_play);
-
-        audio_pipeline_deinit(pipeline_for_play);
+    if (pipeline_for_play) {
+        pipeline_output_deinit(pipeline_for_play, &output_stream_writer);
+        ESP_LOGI(TAG, "Set NULL");
         pipeline_for_play = NULL;
     }
 
@@ -443,3 +409,60 @@ esp_err_t pipeline_playback_stop(void)
     return ESP_OK;
 }
 
+esp_err_t pipeline_playback_set_output_bt(bool enable, const char *device, size_t device_len)
+{
+    esp_err_t err = ESP_FAIL;
+
+    if (!enable && !output_is_bt) {
+        //output already SP. Do nothing
+        return ESP_OK;
+    }
+    pipeline_playback_pause();
+
+    if (pipeline_for_play != NULL) {
+        audio_pipeline_stop(pipeline_for_play);
+        audio_pipeline_wait_for_stop(pipeline_for_play);
+    }
+
+    if (!enable) {
+#ifdef USE_EQ
+        const char *link_tag[5] = {"file_read", "mp3", "equalizer", "resample", "i2s"};
+        int link_num = 5;
+#else
+        const char *link_tag[4] = {"file_read", "mp3", "resample", "i2s"};
+        int link_num = 4;
+#endif
+
+        err = pipeline_output_set_bt(false, pipeline_for_play, &output_stream_writer, link_tag, link_num);
+        pipeline_playback_unpause();
+        return err;
+    } else {
+#ifdef USE_EQ
+        const char *link_tag[5] = {"file_read", "mp3", "equalizer", "resample", "bt"};
+        int link_num = 5;
+#else
+        const char *link_tag[4] = {"file_read", "mp3", "resample", "bt"};
+        int link_num = 4;
+#endif
+        bt_set_device(device, device_len);
+        err = pipeline_output_set_bt(true, pipeline_for_play, &output_stream_writer, link_tag, link_num);
+    }
+    ESP_ERROR_CHECK(esp_event_post_to(pipeline_event_loop, PIPELINE_EVENTS,
+                                      PIPELINE_PLAYBACK_STARTED, NULL, 0, portMAX_DELAY));
+
+
+    return err;
+}
+
+void pipeline_playback_pause(void)
+{
+    //pause playback
+    ESP_LOGI(TAG, "Pause Playback");
+    ESP_ERROR_CHECK(esp_timer_stop(periodic_timer));
+}
+
+void pipeline_playback_unpause(void)
+{
+    ESP_LOGI(TAG, "Resume Playback");
+    esp_timer_start_periodic(periodic_timer, READ_TIMER_INTERVAL);
+}

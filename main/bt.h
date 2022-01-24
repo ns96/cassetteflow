@@ -9,8 +9,19 @@
 #include <audio_event_iface.h>
 #include "bluetooth_service.h"
 
-esp_err_t bt_periph_init(audio_event_iface_handle_t evt);
-esp_err_t bt_init_output_stream(audio_element_handle_t *stream_writer);
+enum
+{
+    BT_SCAN_MODE = 0,
+    BT_CONNECT_MODE = 1,
+};
+
 int bt_process_events(audio_event_iface_msg_t msg);
+void bt_set_device(const char *device, size_t device_len);
+esp_err_t bt_init(void);
+esp_err_t bt_connect_device(void);
+esp_err_t bt_get_devices_list(void);
+esp_err_t bt_deinit(void);
+void bt_pause(void);
+void bt_play(void);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_BT_H

@@ -153,6 +153,8 @@ exit:    //Common return path
 }
 #endif
 
+esp_periph_set_handle_t set = NULL;
+
 void app_main(void)
 {
     esp_err_t err = nvs_flash_init();
@@ -174,7 +176,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[1.0] Initialize peripherals management");
     esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
-    esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
+    set = esp_periph_set_init(&periph_cfg);
 
     ESP_LOGI(TAG, "[1.1] Initialize and start peripherals");
     audio_board_sdcard_init(set, SD_MODE_1_LINE);
@@ -195,8 +197,10 @@ void app_main(void)
     ESP_LOGI(TAG, "[ 3 ] Connect to the network");
     ESP_ERROR_CHECK(network_connect());
 
-    ESP_LOGI(TAG, "[3.1] Create raw queue");
-    ESP_ERROR_CHECK(raw_queue_init());
+    ESP_LOGI(TAG, "[3.1] Create raw queue 0");
+    ESP_ERROR_CHECK(raw_queue_init(0));
+    ESP_LOGI(TAG, "[3.1] Create raw queue 1");
+    ESP_ERROR_CHECK(raw_queue_init(1));
 
     ESP_LOGI(TAG, "[ 4 ] Create and start HTTP server");
     ESP_ERROR_CHECK(http_server_start());

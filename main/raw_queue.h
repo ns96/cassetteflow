@@ -13,9 +13,9 @@ typedef struct
     char line[64];
 } raw_queue_message_t;
 
-esp_err_t raw_queue_init(void);
-void raw_queue_reset(void);
-esp_err_t raw_queue_send(raw_queue_message_t *msg);
-esp_err_t raw_queue_get(raw_queue_message_t *msg, int timeout_ticks);
+esp_err_t raw_queue_init(int index);
+void raw_queue_reset(int index);
+esp_err_t raw_queue_send(int index, raw_queue_message_t *msg);
+esp_err_t raw_queue_get(int index, raw_queue_message_t *msg, int timeout_ticks);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_RAW_QUEUE_H
