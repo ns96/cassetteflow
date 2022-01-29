@@ -14,6 +14,7 @@ set(COMPONENT_SRCS
         eq.c
         led.c
         mp3info.c
+        flacinfo.c
         filter_line_reader.c
         bt.c
         pipeline_output.c

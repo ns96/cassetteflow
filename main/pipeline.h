@@ -22,6 +22,12 @@ enum
     PIPELINE_PLAYBACK_STARTED = 3,
 };
 
+enum pipeline_decoder_mode
+{
+    PIPELINE_DECODER_MP3 = 0,
+    PIPELINE_DECODER_FLAC = 1,
+};
+
 void pipeline_set_side(const char side);
 void pipeline_handle_play(void);
 void pipeline_handle_set(void);

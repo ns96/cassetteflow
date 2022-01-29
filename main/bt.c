@@ -301,10 +301,11 @@ esp_err_t bt_deinit(void)
 
     if (bt_periph) {
         periph_bt_stop(bt_periph);
-        esp_periph_stop(bt_periph);
+        esp_avrc_ct_deinit();
+        esp_avrc_tg_deinit();
         a2dp_destroy();
-
-//        esp_periph_destroy(bt_periph);
+        esp_periph_stop(bt_periph);
+        esp_periph_destroy(bt_periph);
 
         //audio_event_iface_remove_listener(esp_periph_set_get_event_iface(set), evt);
         //disabling bluetooth stop wifi working!
@@ -312,9 +313,9 @@ esp_err_t bt_deinit(void)
         //ESP_ERROR_CHECK(esp_bluedroid_deinit());
         //ESP_ERROR_CHECK(esp_bt_controller_disable());
         //ESP_ERROR_CHECK(esp_bt_controller_deinit());
-        //bt_periph = NULL;
+        bt_periph = NULL;
     }
-
+    vTaskDelay(100);
     return ESP_OK;
 }
 
@@ -351,15 +352,14 @@ esp_err_t bt_connect_device(void)
     ESP_LOGI(TAG, "[-] Create Bluetooth peripheral");
     if (!bt_periph) {
         bt_periph = bt_create_periph();
+        if (bt_periph == NULL) {
+            ESP_LOGE(TAG, "[-] Error init bt_periph");
+            return ESP_FAIL;
+        }
+        // Initialize peripherals management
+        ESP_LOGI(TAG, "[-] Start bt peripheral");
+        esp_periph_start(set, bt_periph);
     }
-    if (bt_periph == NULL) {
-        ESP_LOGE(TAG, "[-] Error init bt_periph");
-        return ESP_FAIL;
-    }
-
-    // Initialize peripherals management
-    ESP_LOGI(TAG, "[-] Start bt peripheral");
-    esp_periph_start(set, bt_periph);
 
     //ESP_LOGI(TAG, "[-] Listening event from peripherals");
     //audio_event_iface_set_listener(esp_periph_set_get_event_iface(set), evt);

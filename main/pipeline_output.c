@@ -11,8 +11,14 @@
 #include "a2dp_stream.h"
 #include "esp_a2dp_api.h"
 #include "pipeline.h"
+#include <filter_resample.h>
 
 #define PLAYBACK_RATE       48000
+
+static const char *TAG = "cf_pipeline_output";
+
+static const char *STREAM_NAME_SP_OUTPUT = "i2s";
+static const char *STREAM_NAME_BT_OUTPUT = "bt";
 
 bool output_is_bt = false;
 static audio_element_handle_t i2s_stream_writer = NULL;
@@ -22,11 +28,7 @@ extern audio_event_iface_handle_t evt;
 
 static audio_element_handle_t *output_stream = NULL;
 
-static const char *sp_output_stream_name = {"i2s"};
-static const char *bt_output_stream_name = {"bt"};
-static char output_stream_name[4] = {0};
-
-static const char *TAG = "cf_pipeline_output";
+static char *output_stream_name = NULL;
 
 static void bt_a2d_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
 {
@@ -44,7 +46,7 @@ static void bt_a2d_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
 }
 
 esp_err_t pipeline_output_init_stream(audio_element_handle_t **output_stream_writer,
-                                      char *stream_name)
+                                      char **stream_name)
 {
     ESP_LOGI(TAG, "[-] Create output");
     audio_element_state_t state = 0;
@@ -65,8 +67,8 @@ esp_err_t pipeline_output_init_stream(audio_element_handle_t **output_stream_wri
             bt_connect_device();
             pipeline_pause();
         }
-        strcpy(stream_name, bt_output_stream_name);
-        strcpy(output_stream_name, bt_output_stream_name);
+
+        output_stream_name = (char *)STREAM_NAME_BT_OUTPUT;
         output_stream = &bt_stream_writer;
     } else {
         ESP_LOGI(TAG, "[1] Create i2s_stream_writer");
@@ -76,15 +78,18 @@ esp_err_t pipeline_output_init_stream(audio_element_handle_t **output_stream_wri
         i2s_cfg.task_core = 1;
         i2s_stream_writer = i2s_stream_init(&i2s_cfg);
 
-        strcpy(stream_name, sp_output_stream_name);
-        strcpy(output_stream_name, sp_output_stream_name);
+        output_stream_name = (char *)STREAM_NAME_SP_OUTPUT;
         output_stream = &i2s_stream_writer;
     }
 
+    if (stream_name) {
+        *stream_name = output_stream_name;
+    }
     if (output_stream == NULL) {
         ESP_LOGE(TAG, "Error init %s stream", output_stream_name);
         return ESP_FAIL;
     }
+
     state = audio_element_get_state(*output_stream);
     ESP_LOGI(TAG, "[1] Created output stream state %d", state);
 
@@ -92,8 +97,9 @@ esp_err_t pipeline_output_init_stream(audio_element_handle_t **output_stream_wri
     return ESP_OK;
 }
 
-esp_err_t pipeline_output_set_bt(bool enable_bt, audio_pipeline_handle_t pipeline, audio_element_handle_t **output_stream_writer,
-                                  const char **link_tag, int link_num)
+esp_err_t pipeline_output_set_bt(bool enable_bt, audio_pipeline_handle_t pipeline,
+                                 audio_element_handle_t **output_stream_writer, audio_element_handle_t *resampler,
+                                  char **link_tag, int link_num)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
     ESP_LOGE(TAG, "Changing output");
@@ -128,25 +134,49 @@ esp_err_t pipeline_output_set_bt(bool enable_bt, audio_pipeline_handle_t pipelin
         bt_stream_writer = NULL;
     }
 
-    pipeline_output_init_stream(output_stream_writer, output_stream_name);
+    //Bt and i2s has different samplerate. We need to recreate resampler
+    ESP_LOGI(TAG, "Destroy resampler");
+    audio_pipeline_unregister(pipeline, *resampler);
+    audio_element_deinit(*resampler);
+
+    ESP_LOGI(TAG, "Create resampler");
+    rsp_filter_cfg_t rsp_cfg = DEFAULT_RESAMPLE_FILTER_CONFIG();
+    rsp_cfg.src_rate = PLAYBACK_RATE;
+    rsp_cfg.src_ch = 2;
+    if (output_is_bt) {
+        rsp_cfg.dest_rate = 44100;
+    } else {
+        rsp_cfg.dest_rate = PLAYBACK_RATE;
+    }
+    rsp_cfg.dest_ch = 2;
+    rsp_cfg.mode = RESAMPLE_DECODE_MODE;
+    rsp_cfg.complexity = 0;
+    rsp_cfg.task_core = 1;
+    rsp_cfg.task_prio = 10;
+    *resampler = rsp_filter_init(&rsp_cfg);
+    if (*resampler == NULL) {
+        ESP_LOGE(TAG, "error init resampler");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Register resampler");
+    audio_pipeline_register(pipeline, *resampler, "resample");
+
+    pipeline_output_init_stream(output_stream_writer, NULL);
 
     ESP_LOGI(TAG, "Register %s stream writer", output_stream_name);
     audio_pipeline_register(pipeline, *output_stream, output_stream_name);
 
+    //replace output stream name with new one
+    link_tag[link_num - 1] = output_stream_name;
     ESP_LOGI(TAG, "Link tags");
-    audio_pipeline_relink(pipeline, link_tag, link_num);
+    audio_pipeline_relink(pipeline, (const char **)link_tag, link_num);
     //audio_pipeline_set_listener(pipeline, evt);
     ESP_LOGI(TAG, "[-] Listening event from pipelines");
     ESP_ERROR_CHECK(audio_pipeline_set_listener(pipeline, evt));
 
-    //audio_pipeline_reset_ringbuffer(pipeline);
-    //audio_pipeline_reset_elements(pipeline);
-    //audio_pipeline_change_state(pipeline, AEL_STATE_INIT);
     audio_pipeline_run(pipeline);
     audio_pipeline_resume(pipeline);
-
-
-    //ESP_LOGE(TAG, "[ 4.1 ] Start playback new pipeline");
 
     return ESP_OK;
 }
@@ -174,4 +204,9 @@ void pipeline_output_deinit(audio_pipeline_handle_t pipeline, audio_element_hand
     } else {
         i2s_stream_writer = NULL;
     }
+}
+
+char *pipeline_output_get_stream_name(void)
+{
+    return output_stream_name;
 }
