@@ -18,7 +18,7 @@
 #include "minimodem_config.h"
 #include "minimodem_decoder.h"
 #include "filter_line_reader.h"
-#include "mp3db.h"
+#include "audiodb.h"
 #include "raw_queue.h"
 #include "pipeline_output.h"
 #include "bt.h"

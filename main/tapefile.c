@@ -9,7 +9,7 @@
 
 #include "tapefile.h"
 #include "internal.h"
-#include "mp3db.h"
+#include "audiodb.h"
 
 static const char *TAG = "cf_tapefile";
 
@@ -143,7 +143,7 @@ esp_err_t tapefile_create(const char side, int tape_length_minutes, char *data, 
 
     while ((mp3id != NULL) && (ret == ESP_OK)) {
         int mp3_length_seconds = 0;
-        if (mp3db_file_for_id(mp3id, NULL, &mp3_length_seconds, NULL) != ESP_OK) {
+        if (audiodb_file_for_id(mp3id, NULL, &mp3_length_seconds, NULL) != ESP_OK) {
             // file not found in the DB
             ret = ESP_ERR_NOT_FOUND;
             continue;

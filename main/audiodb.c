@@ -8,20 +8,21 @@
 #include <sdcard_scan.h>
 #include <mbedtls/md.h>
 #include <string.h>
-#include "mp3db.h"
+#include "audiodb.h"
 #include "internal.h"
 #include "mp3info.h"
+#include "flacinfo.h"
 
 #define SDCARD_FILE_PREV_NAME           "file:/"
 
-static const char *TAG = "cf_mp3db";
+static const char *TAG = "cf_audiodb";
 
 /**
  * get10CharacterHash()
  * @param filename input filename string
  * @param id10c output data (11 bytes size)
  */
-static void mp3db_filename_to_id10c(const char *filename, char *id10c)
+static void audiodb_filename_to_id10c(const char *filename, char *id10c)
 {
     uint8_t shaResult[32];
     mbedtls_md_context_t ctx;
@@ -43,26 +44,29 @@ static void mp3db_filename_to_id10c(const char *filename, char *id10c)
 
 /**
  * Save file to the DB
- * @param filepath full path with filename (/sdcard/file.mp3)
+ * @param filepath full path with filename (/sdcard/file.mp3(.flac))
  * @return
  */
-static esp_err_t mp3db_file_save(const char *filepath)
+static esp_err_t audiodb_file_save(const char *filepath)
 {
     FILE *fd_db;
     int duration = 0, avg_bitrate = 0;
 
-    fd_db = fopen(FILE_MP3DB, "a");
+    fd_db = fopen(FILE_AUDIODB, "a");
     if (!fd_db) {
-        ESP_LOGE(TAG, "Failed to open DB : %s", FILE_MP3DB);
+        ESP_LOGE(TAG, "Failed to open DB : %s", FILE_AUDIODB);
         return ESP_FAIL;
     }
-
-    mp3info_get_info(filepath, &duration, &avg_bitrate);
+    if (strcmp((filepath + strlen(filepath) - 3), "mp3") == 0) {
+        mp3info_get_info(filepath, &duration, &avg_bitrate);
+    } else if (strcmp((filepath + strlen(filepath) - 4), "flac") == 0) {
+        flacinfo_get_info(filepath, &duration, &avg_bitrate);
+    }
     const char *filename = filepath + strlen("/sdcard/");
-    char mp3id[11];
-    mp3db_filename_to_id10c(filename, mp3id);
+    char audioid[11];
+    audiodb_filename_to_id10c(filename, audioid);
 
-    fprintf(fd_db, "%s\t%d\t%d\t%s\n", mp3id, duration, avg_bitrate, filepath);
+    fprintf(fd_db, "%s\t%d\t%d\t%s\n", audioid, duration, avg_bitrate, filepath);
 
     fclose(fd_db);
     return ESP_OK;
@@ -70,23 +74,23 @@ static esp_err_t mp3db_file_save(const char *filepath)
 
 /**
  * Check if file present in the DB
- * @param filepath full path with filename (/sdcard/file.mp3)
+ * @param filepath full path with filename (/sdcard/file.mp3(.flac))
  * @return true if file is already in the db
  */
-static bool mp3db_file_exists(const char *filepath)
+static bool audiodb_file_exists(const char *filepath)
 {
     FILE *fd_db;
     char *line_file;
     bool found = false;
 
-    line_file = malloc(MP3DB_MAX_LINE_LENGTH);
+    line_file = malloc(AUDIODB_MAX_LINE_LENGTH);
     if (line_file == NULL) {
         return false;
     }
 
-    fd_db = fopen(FILE_MP3DB, "r");
+    fd_db = fopen(FILE_AUDIODB, "r");
     if (!fd_db) {
-        ESP_LOGE(TAG, "Failed to open DB : %s", FILE_MP3DB);
+        ESP_LOGE(TAG, "Failed to open DB : %s", FILE_AUDIODB);
         free(line_file);
         return false;
     }
@@ -108,38 +112,38 @@ static bool mp3db_file_exists(const char *filepath)
 
 /**
  * Get file info from the DB
- * @param mp3id input mp3id (10 characters hash)
- * @param filepath output full path with filename (/sdcard/file.mp3) (at least SDCARD_FILE_PREV_NAME-1 bytes)
+ * @param audioid input audioid (10 characters hash)
+ * @param filepath output full path with filename (/sdcard/file.mp3(.flac)) (at least SDCARD_FILE_PREV_NAME-1 bytes)
  *  (can be NULL)
  * @param duration output duration in seconds (can be NULL)
  * @param avg_bitrate output average bitrate in bits per second (can be NULL)
  * @return true if file is already in the db
  */
-esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration, int *avg_bitrate)
+esp_err_t audiodb_file_for_id(const char *audioid, char *filepath, int *duration, int *avg_bitrate)
 {
     FILE *fd_db;
-    char line_mp3id[11];
+    char line_audioid[11];
     char *line_file;
     int line_duration = 0;
     int line_avg_bitrate = 0;
 
     esp_err_t ret = ESP_FAIL;
 
-    line_file = malloc(MP3DB_MAX_LINE_LENGTH);
+    line_file = malloc(AUDIODB_MAX_LINE_LENGTH);
     if (line_file == NULL) {
         return ESP_FAIL;
     }
 
-    fd_db = fopen(FILE_MP3DB, "r");
+    fd_db = fopen(FILE_AUDIODB, "r");
     if (!fd_db) {
-        ESP_LOGE(TAG, "Failed to open DB : %s", FILE_MP3DB);
+        ESP_LOGE(TAG, "Failed to open DB : %s", FILE_AUDIODB);
         free(line_file);
         return ESP_FAIL;
     }
 
     // read DB line by line
-    while (fscanf(fd_db, "%10s\t%d\t%d\t%1024[^\n]\n", line_mp3id, &line_duration, &line_avg_bitrate, line_file) == 4) {
-        if (strcmp(mp3id, line_mp3id) == 0) {
+    while (fscanf(fd_db, "%10s\t%d\t%d\t%1024[^\n]\n", line_audioid, &line_duration, &line_avg_bitrate, line_file) == 4) {
+        if (strcmp(audioid, line_audioid) == 0) {
             // file present in the DB
             if (filepath != NULL) {
                 strcpy(filepath, line_file);
@@ -161,7 +165,7 @@ esp_err_t mp3db_file_for_id(const char *mp3id, char *filepath, int *duration, in
     return ret;
 }
 
-static void mp3db_sdcard_url_save_cb(void *user_data, char *url)
+static void audiodb_sdcard_url_save_cb(void *user_data, char *url)
 {
     if (url == NULL) {
         return;
@@ -172,31 +176,31 @@ static void mp3db_sdcard_url_save_cb(void *user_data, char *url)
 
     const char *filepath = url + strlen(SDCARD_FILE_PREV_NAME);
 
-    if (mp3db_file_exists(filepath)) {
-        ESP_LOGI(TAG, "File already in mp3db: %s", filepath);
+    if (audiodb_file_exists(filepath)) {
+        ESP_LOGI(TAG, "File already in audiodb: %s", filepath);
         return;
     }
 
-    if (mp3db_file_save(filepath) == ESP_OK) {
-        ESP_LOGI(TAG, "Added to mp3db: %s", filepath);
+    if (audiodb_file_save(filepath) == ESP_OK) {
+        ESP_LOGI(TAG, "Added to audiodb: %s", filepath);
     }
 }
 
-// scan for new mp3 files on the SD card
-esp_err_t mp3db_scan(void)
+// scan for new mp3 or flac files on the SD card
+esp_err_t audiodb_scan(void)
 {
     ESP_LOGI(TAG, "scan");
 
     // scan for mp3 files
-    sdcard_scan(mp3db_sdcard_url_save_cb, "/sdcard", 0, (const char *[]){"mp3"},
-                1, NULL);
+    sdcard_scan(audiodb_sdcard_url_save_cb, "/sdcard", 0, (const char *[]){"mp3", "flac"},
+                2, NULL);
 
-    ESP_LOGI(TAG, "mp3db_scan done");
+    ESP_LOGI(TAG, "audiodb_scan done");
 
     return ESP_OK;
 }
 
-esp_err_t mp3db_stop(void)
+esp_err_t audiodb_stop(void)
 {
     // nothing for now
 

@@ -8,7 +8,7 @@ set(COMPONENT_SRCS
         pipeline_decode.c
         pipeline_passthrough.c
         keys.c
-        mp3db.c
+        audiodb.c
         tapedb.c
         tapefile.c
         eq.c

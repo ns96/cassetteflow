@@ -198,7 +198,7 @@ static esp_err_t handler_uri_mp3db(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
-    http_respond_file(req, FILE_MP3DB);
+    http_respond_file(req, FILE_AUDIODB);
     return ESP_OK;
 }
 

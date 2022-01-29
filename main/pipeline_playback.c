@@ -17,7 +17,7 @@
 #include "pipeline_decode.h"
 #include "pipeline.h"
 #include "minimodem_config.h"
-#include "mp3db.h"
+#include "audiodb.h"
 #include "raw_queue.h"
 #include "pipeline_output.h"
 #include "bt.h"

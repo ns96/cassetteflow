@@ -13,7 +13,7 @@
 #include "http_server.h"
 #include "network.h"
 #include "keys.h"
-#include "mp3db.h"
+#include "audiodb.h"
 #include "pipeline.h"
 #include "led.h"
 #include "raw_queue.h"
@@ -187,7 +187,7 @@ void app_main(void)
     led_init();
 
     ESP_LOGI(TAG, "[1.3] Scan for new MP3 files on SD card");
-    ESP_ERROR_CHECK(mp3db_scan());
+    ESP_ERROR_CHECK(audiodb_scan());
 
     ESP_LOGI(TAG, "[ 2 ] Init board");
     board_handle = audio_board_init();
