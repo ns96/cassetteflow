@@ -537,12 +537,18 @@ esp_err_t pipeline_decode_event_loop(audio_event_iface_handle_t evt)
         }
         ESP_LOGD(TAG, "%s event:%d", __FUNCTION__, msg.cmd);
 
-        if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT && msg.source == (void *)mp3_decoder
-            && msg.cmd == AEL_MSG_CMD_REPORT_MUSIC_INFO) {
+        if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT
+                && msg.cmd == AEL_MSG_CMD_REPORT_MUSIC_INFO) {
             audio_element_info_t music_info = {0};
-            audio_element_getinfo(mp3_decoder, &music_info);
+            if (msg.source == (void *)mp3_decoder) {
+                audio_element_getinfo(mp3_decoder, &music_info);
+            } else if (msg.source == (void *)flac_decoder) {
+                audio_element_getinfo(flac_decoder, &music_info);
+            } else {
+                continue;
+            }
 
-            ESP_LOGI(TAG, "[ * ] Receive music info from mp3 decoder, sample_rates=%d, bits=%d, ch=%d",
+            ESP_LOGI(TAG, "[ * ] Receive music info from decoder, sample_rates=%d, bits=%d, ch=%d",
                      music_info.sample_rates, music_info.bits, music_info.channels);
 
 #ifdef USE_EQ
