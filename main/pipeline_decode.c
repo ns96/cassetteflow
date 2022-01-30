@@ -71,6 +71,8 @@ static enum pipeline_decoder_mode current_audio_type = PIPELINE_DECODER_MP3;
 
 static audio_event_iface_handle_t evt_playback;
 
+static bool stop_event_loop = false;
+
 static char **make_link_tag(int *tags_number)
 {
 #ifdef USE_EQ
@@ -569,19 +571,16 @@ esp_err_t pipeline_decode_event_loop(audio_event_iface_handle_t evt)
             break;
         }
 
-        // Stop when the last pipeline element (output_stream_writer in this case) receives stop event
-        if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT && (msg.source == (void *)*output_stream_writer)
-            && msg.cmd == AEL_MSG_CMD_REPORT_STATUS
-            && (((int)msg.data == AEL_STATUS_STATE_STOPPED) || ((int)msg.data == AEL_STATUS_STATE_FINISHED))) {
+        // Stop when receives stop event
+        if (stop_event_loop) {
+            stop_event_loop = false;
             ESP_LOGW(TAG, "[ * ] Stop event received");
             break;
         }
 
         // process BT messages
         if (msg.source_type == PERIPH_ID_BLUETOOTH) {
-            if (bt_process_events(msg) == 1) {
-                break;
-            }
+            bt_process_events(msg);
         }
     }
 
@@ -660,6 +659,7 @@ esp_err_t pipeline_decode_set_output_bt(bool enable, const char *device, size_t 
     //pause playback
     ESP_LOGI(TAG, "Pause Decode");
     pause_decode = true;
+    stop_event_loop = true;
 
     if (pipeline_for_play != NULL) {
         audio_pipeline_stop(pipeline_for_play);
