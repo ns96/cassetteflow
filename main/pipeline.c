@@ -77,7 +77,7 @@ void pipeline_handle_play(void)
             // if an encoding is in progress. If no encoding is in progress and the mixtape file (SideA.txt by default)
             // is present, start the encoding process.
             if (pipeline_encode_is_running()) {
-                pipeline_stop_encoding();
+                pipeline_encode_stop();
             } else {
                 // check if mixtape file is present
                 if (tapefile_is_present(current_encoding_side)) {
@@ -112,7 +112,7 @@ void pipeline_set_mode(enum cf_mode mode)
             pipeline_decode_stop();
             break;
         case MODE_ENCODE:
-            pipeline_stop_encoding();
+            pipeline_encode_stop();
             break;
         case MODE_PASSTHROUGH:
             pipeline_passthrough_stop();
@@ -188,20 +188,19 @@ esp_err_t pipeline_start_encoding(const char side)
     return pipeline_encode_start(evt, file_uri);
 }
 
-/**
- * Only for MODE_ENCODE
- * @return
- */
-esp_err_t pipeline_stop_encoding()
+esp_err_t pipeline_stop(void)
 {
-    ESP_LOGI(TAG, "stop_encoding");
-
-    if (pipeline_mode == MODE_ENCODE) {
-        // stop audio pipeline
-        return pipeline_encode_stop();
-    } else {
-        return ESP_FAIL;
+    ESP_LOGI(TAG, "stop");
+    switch (pipeline_mode) {
+        case MODE_ENCODE:
+            return pipeline_encode_stop();
+        case MODE_PLAYBACK:
+            return pipeline_playback_stop();
+        default:
+            assert(0);
+            break;
     }
+    return ESP_FAIL;
 }
 
 esp_err_t pipeline_start_playing(const char side)

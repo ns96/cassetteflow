@@ -371,14 +371,14 @@ static esp_err_t handler_uri_stop(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
-    esp_err_t err = pipeline_stop_encoding();
+    esp_err_t err = pipeline_stop();
 
     if (err == ESP_OK) {
         /* Respond with empty body */
         httpd_resp_send(req, NULL, 0);
     } else {
         /* Respond with 500 Internal Server Error */
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to stop encoding");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to stop");
     }
     return ESP_OK;
 }
