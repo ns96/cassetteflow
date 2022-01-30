@@ -20,7 +20,7 @@ extern audio_board_handle_t board_handle;
  */
 esp_err_t volume_set(int value)
 {
-    static int last_volume = 20;
+    static bool muted = false;
     int audio_volume = 0;
 
     ESP_LOGI(TAG, "[ * ] value: %d", value);
@@ -40,13 +40,11 @@ esp_err_t volume_set(int value)
             audio_volume = 0;
         }
     } else {
-        if (audio_volume == 0) {
-            //unmute
-            audio_volume = last_volume;
-        } else {
-            //mute
-            audio_volume = 0;
-        }
+        //mute or unmute
+        muted = !muted;
+        ESP_LOGI(TAG, "[ * ] Mute set to %s", muted ? "true" : "false");
+        audio_hal_set_mute(board_handle->audio_hal, muted);
+        return ESP_OK;
     }
 
     ESP_LOGI(TAG, "[ * ] Volume set to %d %%", audio_volume);
@@ -54,9 +52,5 @@ esp_err_t volume_set(int value)
         return ESP_FAIL;
     }
 
-    //store last volume
-    if (audio_volume != 0) {
-        last_volume = audio_volume;
-    }
     return ESP_OK;
 }
