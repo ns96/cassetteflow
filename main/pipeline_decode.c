@@ -11,7 +11,6 @@
 #include <equalizer.h>
 #include <mp3_decoder.h>
 #include <flac_decoder.h>
-#include <raw_stream.h>
 #include <filter_resample.h>
 #include <string.h>
 #include "pipeline_decode.h"
@@ -43,7 +42,7 @@ static const char *TAG_RESAMPLE = "resample";
 static audio_pipeline_handle_t pipeline_for_play = NULL;
 // record audio from line-in, decode with minimodem and output line by line (raw output)
 static audio_pipeline_handle_t pipeline_for_record = NULL;
-static audio_element_handle_t *output_stream_writer = NULL;
+static audio_element_handle_t output_stream_writer = NULL;
 static audio_element_handle_t fatfs_stream_reader = NULL,
     mp3_decoder = NULL, flac_decoder = NULL,
     equalizer = NULL, resample_for_play = NULL;
@@ -63,15 +62,11 @@ static char last_line_from_minimodem[64] = {0};
 // in microseconds
 static int64_t last_line_from_minimodem_time_us = 0;
 
-extern bool output_is_bt;
-
 static bool pause_decode = false;
 
 static enum pipeline_decoder_mode current_audio_type = PIPELINE_DECODER_MP3;
 
 static audio_event_iface_handle_t evt_playback;
-
-static bool stop_event_loop = false;
 
 static char **make_link_tag(int *tags_number)
 {
@@ -109,7 +104,7 @@ static audio_element_handle_t resampler_init(void)
     rsp_filter_cfg_t rsp_cfg = DEFAULT_RESAMPLE_FILTER_CONFIG();
     rsp_cfg.src_rate = PLAYBACK_RATE;
     rsp_cfg.src_ch = 2;
-    if (output_is_bt) {
+    if (pipeline_output_is_bt()) {
         rsp_cfg.dest_rate = 44100;
     } else {
         rsp_cfg.dest_rate = PLAYBACK_RATE;
@@ -146,15 +141,8 @@ static void set_playback_decoder(audio_pipeline_handle_t pipeline, const char *f
     if (current_audio_type == file_decoder) {
         return;
     }
-    current_audio_type = file_decoder;
-
-    ESP_LOGI(TAG, "Stop pipeline");
-    audio_pipeline_stop(pipeline_for_play);
-    audio_pipeline_wait_for_stop(pipeline_for_play);
 
     ESP_LOGI(TAG, "Relink pipeline");
-    audio_pipeline_reset_ringbuffer(pipeline);
-    audio_pipeline_reset_elements(pipeline);
     audio_pipeline_breakup_elements(pipeline, NULL);
 
     int link_num;
@@ -164,9 +152,6 @@ static void set_playback_decoder(audio_pipeline_handle_t pipeline, const char *f
 
     ESP_LOGI(TAG, "[-] Listening event from pipelines");
     ESP_ERROR_CHECK(audio_pipeline_set_listener(pipeline, evt_playback));
-
-    ESP_ERROR_CHECK(esp_event_post_to(pipeline_event_loop, PIPELINE_EVENTS,
-                                      PIPELINE_DECODE_STARTED, NULL, 0, portMAX_DELAY));
 }
 
 static esp_err_t create_playback_pipeline(void)
@@ -196,6 +181,7 @@ static esp_err_t create_playback_pipeline(void)
     fatfs_cfg.type = AUDIO_STREAM_READER;
     fatfs_cfg.task_core = 1;
     fatfs_cfg.task_prio = 10;
+    fatfs_cfg.ext_stack = true;
     fatfs_stream_reader = fatfs_stream_init(&fatfs_cfg);
 
     if (fatfs_stream_reader == NULL) {
@@ -252,7 +238,7 @@ static esp_err_t create_playback_pipeline(void)
     audio_pipeline_register(pipeline_for_play, equalizer, "equalizer");
 #endif
     audio_pipeline_register(pipeline_for_play, resample_for_play, "resample");
-    audio_pipeline_register(pipeline_for_play, *output_stream_writer, output_stream_name);
+    audio_pipeline_register(pipeline_for_play, output_stream_writer, output_stream_name);
 
     ESP_LOGI(TAG, "[7] Link it together [sdcard]-->fatfs_stream-->decoder-->equalizer-->resample--> %s stream", output_stream_name);
     int link_num;
@@ -308,6 +294,7 @@ static esp_err_t create_record_pipeline(void)
     ESP_LOGI(TAG, "[3] Create minimodem_decoder");
     minimodem_decoder_cfg_t minimodem_decoder_cfg = DEFAULT_MINIMODEM_DECODER_CONFIG();
     minimodem_decoder_cfg.task_prio = 10;
+    minimodem_decoder_cfg.stack_in_ext = false; // keep minimodem's stack in internal memory
     minimodem_decoder = minimodem_decoder_init(&minimodem_decoder_cfg);
     if (minimodem_decoder == NULL) {
         ESP_LOGE(TAG, "error init minimodem_decoder");
@@ -317,6 +304,7 @@ static esp_err_t create_record_pipeline(void)
     ESP_LOGI(TAG, "[4] Create filter_line_reader");
     filter_line_cfg_t line_reader_cfg = DEFAULT_FILTER_LINE_CONFIG();
     line_reader_cfg.task_prio = 10;
+    line_reader_cfg.stack_in_ext = true;
     filter_line_reader = filter_line_reader_init(&line_reader_cfg);
     if (filter_line_reader == NULL) {
         ESP_LOGE(TAG, "error init filter_line_reader");
@@ -384,7 +372,7 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
 
     int fatfs_byte_pos = 0; // start from the beginning by default
     int current_playing_audio_time_seconds = 0;
-    audio_element_state_t state = audio_element_get_state(*output_stream_writer);
+    audio_element_state_t state = audio_element_get_state(output_stream_writer);
     audio_element_info_t fatfs_music_info = {0};
     if (state == AEL_STATE_RUNNING) {
         // pipeline is playing, get current mp3 time
@@ -450,7 +438,7 @@ static esp_err_t pipeline_decode_handle_no_line_data(void)
 {
     // d. If no line data is being received i.e. the cassette tape was stopped, then stop playback of the current MP3 and wait for more data.
 
-    audio_element_state_t state = audio_element_get_state(*output_stream_writer);
+    audio_element_state_t state = audio_element_get_state(output_stream_writer);
     switch (state) {
         case AEL_STATE_NONE:
         case AEL_STATE_INIT:
@@ -572,22 +560,13 @@ esp_err_t pipeline_decode_event_loop(audio_event_iface_handle_t evt)
         // Stop when the last pipeline element (i2s_stream_reader in this case) receives stop event
         if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT && (msg.source == (void *)i2s_stream_reader)
             && msg.cmd == AEL_MSG_CMD_REPORT_STATUS
-            && (((int)msg.data == AEL_STATUS_STATE_STOPPED) || ((int)msg.data == AEL_STATUS_STATE_FINISHED))) {
-            ESP_LOGW(TAG, "[ * ] Stop event received");
-            break;
-        }
-
-        // Stop when receives stop event
-        if (stop_event_loop) {
-            stop_event_loop = false;
+            && ((int)msg.data == AEL_STATUS_STATE_FINISHED)) {
             ESP_LOGW(TAG, "[ * ] Stop event received");
             break;
         }
 
         // process BT messages
-        if (msg.source_type == PERIPH_ID_BLUETOOTH) {
-            bt_process_events(msg);
-        }
+        bt_process_events(msg);
     }
 
     return ESP_OK;
@@ -598,6 +577,9 @@ esp_err_t pipeline_decode_stop(void)
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
     if (pipeline_for_record != NULL) {
+        // stop event loop
+        audio_element_report_status(i2s_stream_reader, AEL_STATUS_STATE_FINISHED);
+
         audio_pipeline_stop(pipeline_for_record);
         audio_pipeline_wait_for_stop(pipeline_for_record);
 
@@ -623,7 +605,7 @@ void pipeline_decode_status(char *buf, size_t buf_size)
     ESP_LOGI(TAG, "%s", __FUNCTION__);
 
     // state of playback
-    audio_element_state_t state = audio_element_get_state(*output_stream_writer);
+    audio_element_state_t state = audio_element_get_state(output_stream_writer);
 
     if (state == AEL_STATE_RUNNING) {
         // returns “DECODE” and the current line record if playing
@@ -652,44 +634,6 @@ esp_err_t pipeline_decode_set_equalizer(int band_gain[10])
     }
 
     return ret;
-}
-
-esp_err_t pipeline_decode_set_output_bt(bool enable, const char *device, size_t device_len)
-{
-    esp_err_t err = ESP_FAIL;
-
-    if (!enable && !output_is_bt) {
-        //output already SP. Do nothing
-        return ESP_OK;
-    }
-    //pause playback
-    ESP_LOGI(TAG, "Pause Decode");
-    pause_decode = true;
-    stop_event_loop = true;
-
-    if (pipeline_for_play != NULL) {
-        audio_pipeline_stop(pipeline_for_play);
-        audio_pipeline_wait_for_stop(pipeline_for_play);
-    }
-
-    int link_num;
-    char **link_tag = make_link_tag(&link_num);
-
-    if (!enable) {
-        err = pipeline_output_set_bt(false, pipeline_for_play,
-                                     &output_stream_writer, &resample_for_play,
-                                     link_tag, link_num);
-        pipeline_decode_unpause();
-    } else {
-        bt_set_device(device, device_len);
-        err = pipeline_output_set_bt(true, pipeline_for_play,
-                                     &output_stream_writer, &resample_for_play,
-                                     link_tag, link_num);
-    }
-    free(link_tag);
-    ESP_ERROR_CHECK(esp_event_post_to(pipeline_event_loop, PIPELINE_EVENTS,
-                                      PIPELINE_DECODE_STARTED, NULL, 0, portMAX_DELAY));
-    return err;
 }
 
 void pipeline_decode_pause(void)

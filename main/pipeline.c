@@ -16,6 +16,8 @@
 #include "eq.h"
 #include "led.h"
 #include "pipeline_playback.h"
+#include "bt.h"
+#include "pipeline_output.h"
 
 static const char *TAG = "cf_pipeline";
 
@@ -137,7 +139,7 @@ void pipeline_set_mode(enum cf_mode mode)
             pipeline_passthrough_start(evt);
             break;
         case MODE_PLAYBACK:
-            // nothing here, started with a separate command
+            pipeline_playback_start(evt);
             break;
         default:
             assert(0);
@@ -207,12 +209,15 @@ esp_err_t pipeline_start_playing(const char side)
 {
     ESP_LOGI(TAG, "start_playing");
 
-    pipeline_set_mode(MODE_PLAYBACK);
-
     if (!tapefile_is_present(side)) {
         return ESP_FAIL;
     }
-    return pipeline_playback_start(evt, tapefile_get_path(side));
+
+    pipeline_playback_set_filename(tapefile_get_path(side));
+
+    pipeline_set_mode(MODE_PLAYBACK);
+
+    return ESP_OK;
 }
 
 esp_err_t pipeline_set_equalizer(int band_gain[10])
@@ -281,20 +286,25 @@ esp_err_t pipeline_main(void)
     return ESP_OK;
 }
 
-esp_err_t pipeline_set_output_bt(bool enable, const char *device, size_t device_len)
+esp_err_t pipeline_set_output_bt(bool enable, const char *device)
 {
-    switch (pipeline_mode) {
-        case MODE_DECODE:
-            return pipeline_decode_set_output_bt(enable, device, device_len);
-        case MODE_ENCODE:
-            break;
-        case MODE_PASSTHROUGH:
-            break;
-        case MODE_PLAYBACK:
-            return pipeline_playback_set_output_bt(enable, device, device_len);
-        default:
-            assert(0);
-            break;
+    if (enable != pipeline_output_is_bt()) {
+        switch (pipeline_mode) {
+            case MODE_DECODE:
+                pipeline_decode_stop();
+                bt_set_device(device);
+                pipeline_output_set_bt(enable);
+                pipeline_decode_start(evt);
+                break;
+            case MODE_ENCODE:
+            case MODE_PASSTHROUGH:
+            case MODE_PLAYBACK:
+                /* not supported */
+                return ESP_ERR_NOT_SUPPORTED;
+            default:
+                assert(0);
+                break;
+        }
     }
     return ESP_OK;
 }

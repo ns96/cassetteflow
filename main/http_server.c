@@ -463,10 +463,10 @@ static esp_err_t handler_uri_output(httpd_req_t *req)
                 char *device;
                 device = urlDecode(param);
                 ESP_LOGI(TAG, "Decoded device name => %s", device);
-                err = pipeline_set_output_bt(true, device, strlen(device) + 1);
+                err = pipeline_set_output_bt(true, device);
                 free(device);
                 if (err != ESP_OK){
-                    snprintf(response_buff, sizeof(response_buff),"Failed connect to device => %s", param);
+                    snprintf(response_buff, sizeof(response_buff), "Failed connect to device => %s", param);
                 }
             } else {
                 //get devices list
@@ -489,7 +489,7 @@ static esp_err_t handler_uri_output(httpd_req_t *req)
                 goto exit;
             }
         } else if (strncmp(param, "SP", strlen("SP")) == 0) {
-            err = pipeline_set_output_bt(false, NULL, 0);
+            err = pipeline_set_output_bt(false, NULL);
             if (err != ESP_OK) {
                 snprintf(response_buff, sizeof(response_buff),"Failed to set output to SP");
             }

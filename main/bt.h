@@ -16,7 +16,7 @@ enum
 };
 
 int bt_process_events(audio_event_iface_msg_t msg);
-void bt_set_device(const char *device, size_t device_len);
+void bt_set_device(const char *device);
 esp_err_t bt_init(void);
 esp_err_t bt_connect_device(void);
 esp_err_t bt_get_devices_list(void);

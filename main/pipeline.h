@@ -39,7 +39,7 @@ esp_err_t pipeline_init(audio_event_iface_handle_t event_handle);
 esp_err_t pipeline_main(void);
 esp_err_t pipeline_set_equalizer(int band_gain[10]);
 esp_err_t pipeline_start_playing(const char side);
-esp_err_t pipeline_set_output_bt(bool enable, const char *device, size_t device_len);
+esp_err_t pipeline_set_output_bt(bool enable, const char *device);
 void pipeline_unpause(void);
 void pipeline_pause(void);
 

@@ -26,7 +26,6 @@ extern esp_periph_set_handle_t set;
 
 typedef uint8_t esp_peer_bdname_t[ESP_BT_GAP_MAX_BDNAME_LEN + 1];
 //bt config
-extern bool output_is_bt;
 static esp_periph_handle_t bt_periph = NULL;
 static esp_peer_bdname_t remote_bt_device_name;
 static esp_bd_addr_t remote_bd_addr = {0};
@@ -44,21 +43,19 @@ static int devices_in_list = 0;
 static void init_devices_list(void)
 {
     devices_in_list = 0;
-    list = malloc(MAX_DEVICES_IN_LIST * sizeof(char *));
-    for (int i = 0; i < MAX_DEVICES_IN_LIST; ++i) {
-        list[i] = NULL;
-    }
+    list = calloc(MAX_DEVICES_IN_LIST, sizeof(char *));
 }
 
 static void deinit_devices_list(void)
 {
-    for (int i = 0; i < devices_in_list; ++i) {
-        if (list[i] != NULL) {
-            free(list[i]);
-        }
-    }
     if (list != NULL) {
+        for (int i = 0; i < devices_in_list; ++i) {
+            if (list[i] != NULL) {
+                free(list[i]);
+            }
+        }
         free(list);
+        list = NULL;
     }
 }
 
@@ -78,7 +75,7 @@ static void add_device_to_list(const char *name)
         ESP_LOGI(TAG, "Can`t store device name, list limit reached: %d", MAX_DEVICES_IN_LIST);
         return;
     }
-    list[devices_in_list] = (char *)malloc(ESP_BT_GAP_MAX_BDNAME_LEN + 1);
+    list[devices_in_list] = malloc(ESP_BT_GAP_MAX_BDNAME_LEN + 1);
     strcpy(list[devices_in_list], name);
     devices_in_list++;
 }
@@ -296,8 +293,8 @@ int bt_process_events(audio_event_iface_msg_t msg)
 
 esp_err_t bt_deinit(void)
 {
-        bt_is_enabled = false;
-        //bt_is_init = false;
+    bt_is_enabled = false;
+    //bt_is_init = false;
 
     if (bt_periph) {
         periph_bt_stop(bt_periph);
@@ -333,10 +330,10 @@ void bt_play(void)
     }
 }
 
-void bt_set_device(const char *device, size_t device_len)
+void bt_set_device(const char *device)
 {
     if (device) {
-        memcpy(remote_bt_device_name, device, device_len);
+        strcpy((char *)remote_bt_device_name, device);
     }
     if (bt_is_init) {
         bt_deinit();
