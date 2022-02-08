@@ -381,3 +381,10 @@ esp_err_t bt_get_devices_list(void)
 
     return ESP_OK;
 }
+
+// this is needed to fix build error when BLE is disabled
+__attribute__((weak)) esp_err_t esp_blufi_profile_deinit(void)
+{
+    // nothing here
+    return ESP_OK;
+}

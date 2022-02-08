@@ -347,7 +347,7 @@ minimodem_decoder_struct *minimodem_receive_cfg()
     if (samplebuf_size < sample_rate / SAMPLE_BUF_DIVISOR)
         samplebuf_size = sample_rate / SAMPLE_BUF_DIVISOR;
 #endif
-    float *samplebuf = malloc(samplebuf_size * sizeof(float));
+    float *samplebuf = heap_caps_malloc(samplebuf_size * sizeof(float), MALLOC_CAP_INTERNAL);
     size_t samples_nvalid = 0;
     debug_log("samplebuf_size=%zu\n", samplebuf_size);
 
@@ -408,13 +408,13 @@ minimodem_decoder_struct *minimodem_receive_cfg()
     float track_amplitude = 0.0;
     float peak_confidence = 0.0;
 
-    minimodem_decoder_struct *ret = malloc(sizeof(minimodem_decoder_struct));
+    minimodem_decoder_struct *ret = heap_caps_malloc(sizeof(minimodem_decoder_struct), MALLOC_CAP_SPIRAM);
     if (ret == NULL) {
         ESP_LOGE(TAG, "Out of memory allocating: minimodem_decoder_struct");
         return NULL;
     }
     const size_t buf_load = (samplebuf_size / 2) * 2 * sizeof(int16_t);
-    char *buf_part = malloc(buf_load);
+    char *buf_part = heap_caps_malloc(buf_load, MALLOC_CAP_INTERNAL);
     if (buf_part == NULL) {
         free(ret);
         ESP_LOGE(TAG, "Out of memory allocating: buf_part");
