@@ -118,6 +118,39 @@ static audio_element_handle_t resampler_init(void)
     return resample;
 }
 
+static esp_err_t flac_init(audio_pipeline_handle_t pipeline)
+{
+    ESP_LOGI(TAG, "[3.1] Create flac decoder");
+    flac_decoder_cfg_t flac_dec_cfg = DEFAULT_FLAC_DECODER_CONFIG();
+    flac_dec_cfg.task_core = 1;
+    flac_dec_cfg.task_prio = 10;
+    flac_decoder = flac_decoder_init(&flac_dec_cfg);
+    if (flac_decoder == NULL) {
+        ESP_LOGE(TAG, "error init flac_decoder");
+        return ESP_FAIL;
+    }
+
+    audio_pipeline_register(pipeline_for_play, flac_decoder, "flac");
+    current_audio_type = PIPELINE_DECODER_FLAC;
+    return ESP_OK;
+}
+
+static esp_err_t mp3_init(audio_pipeline_handle_t pipeline)
+{
+    ESP_LOGI(TAG, "[3] Create mp3_decoder");
+    mp3_decoder_cfg_t mp3_cfg = DEFAULT_MP3_DECODER_CONFIG();
+    mp3_cfg.task_core = 1;
+    mp3_cfg.task_prio = 10;
+    mp3_decoder = mp3_decoder_init(&mp3_cfg);
+    if (mp3_decoder == NULL) {
+        ESP_LOGE(TAG, "error init mp3_decoder");
+        return ESP_FAIL;
+    }
+    audio_pipeline_register(pipeline_for_play, mp3_decoder, "mp3");
+    current_audio_type = PIPELINE_DECODER_MP3;
+    return ESP_OK;
+}
+
 static void set_playback_decoder(audio_pipeline_handle_t pipeline, const char *filepath)
 {
     enum pipeline_decoder_mode file_decoder;
@@ -144,6 +177,23 @@ static void set_playback_decoder(audio_pipeline_handle_t pipeline, const char *f
 
     ESP_LOGI(TAG, "Relink pipeline");
     audio_pipeline_breakup_elements(pipeline, NULL);
+
+    //deinit old decoder and init new one
+    if (current_audio_type == PIPELINE_DECODER_MP3) {
+        if (mp3_decoder) {
+            audio_pipeline_unregister(pipeline, mp3_decoder);
+            audio_element_deinit(mp3_decoder);
+            mp3_decoder = NULL;
+        }
+        flac_init(pipeline);
+    } else {
+        if (flac_decoder) {
+            audio_pipeline_unregister(pipeline, flac_decoder);
+            audio_element_deinit(flac_decoder);
+            flac_decoder = NULL;
+        }
+        mp3_init(pipeline);
+    }
 
     int link_num;
     char **link_tag = make_link_tag(&link_num);
@@ -189,25 +239,8 @@ static esp_err_t create_playback_pipeline(void)
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "[3] Create mp3_decoder");
-    mp3_decoder_cfg_t mp3_cfg = DEFAULT_MP3_DECODER_CONFIG();
-    mp3_cfg.task_core = 1;
-    mp3_cfg.task_prio = 10;
-    mp3_decoder = mp3_decoder_init(&mp3_cfg);
-    if (mp3_decoder == NULL) {
-        ESP_LOGE(TAG, "error init mp3_decoder");
-        return ESP_FAIL;
-    }
-
-    ESP_LOGI(TAG, "[3.1] Create flac decoder");
-    flac_decoder_cfg_t flac_dec_cfg = DEFAULT_FLAC_DECODER_CONFIG();
-    flac_dec_cfg.task_core = 1;
-    flac_dec_cfg.task_prio = 10;
-    flac_decoder = flac_decoder_init(&flac_dec_cfg);
-    if (flac_decoder == NULL) {
-        ESP_LOGE(TAG, "error init flac_decoder");
-        return ESP_FAIL;
-    }
+    //use default mp3 decoder
+    mp3_init(pipeline_for_play);
 
 #ifdef USE_EQ
     ESP_LOGI(TAG, "[4] Create equalizer");
@@ -232,8 +265,7 @@ static esp_err_t create_playback_pipeline(void)
 
     ESP_LOGI(TAG, "[6] Register all elements to audio pipeline");
     audio_pipeline_register(pipeline_for_play, fatfs_stream_reader, "file_read");
-    audio_pipeline_register(pipeline_for_play, mp3_decoder, "mp3");
-    audio_pipeline_register(pipeline_for_play, flac_decoder, "flac");
+
 #ifdef USE_EQ
     audio_pipeline_register(pipeline_for_play, equalizer, "equalizer");
 #endif
