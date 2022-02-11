@@ -23,7 +23,7 @@ enum cf_mode
 #define FILENAME_SIDE_A_TAPEDB     "/sdcard/sideA_tapedb.txt"
 #define FILENAME_SIDE_B_TAPEDB     "/sdcard/sideB_tapedb.txt"
 
-#define FILE_AUDIODB      "/sdcard/mp3db.txt"
+#define FILE_AUDIODB      "/sdcard/audiodb.txt"
 #define FILE_TAPEDB     "/sdcard/tapedb.txt"
 
 // equalizer preset file (CSV format, 10 bands)

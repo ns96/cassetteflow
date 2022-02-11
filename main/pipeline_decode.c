@@ -415,7 +415,7 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     }
 
     if (strcmp(mp3_id, current_playing_audio_id) == 0) {
-        if (abs(playtime_seconds - current_playing_audio_time_seconds) <= 2) {
+        if (abs(playtime_seconds - current_playing_audio_time_seconds) <= 10) {
             ESP_LOGI(TAG, "already playing this file");
             return ESP_OK;
         }
