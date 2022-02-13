@@ -22,6 +22,7 @@
 #include "raw_queue.h"
 #include "pipeline_output.h"
 #include "bt.h"
+#include "tapefile.h"
 
 static const char *TAG = "cf_pipeline_playback";
 
@@ -59,6 +60,7 @@ static int current_playing_audio_avg_bitrate = 0;
 static esp_timer_handle_t periodic_timer = NULL;
 static FILE *fd_side_file = NULL;
 static int64_t pause_time_us = 0;
+static int64_t time_started_us = 0;
 
 static enum pipeline_decoder_mode current_audio_type = PIPELINE_DECODER_MP3;
 
@@ -470,6 +472,8 @@ esp_err_t pipeline_playback_start(audio_event_iface_handle_t evt)
     /* Start the timer */
     ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer, READ_TIMER_INTERVAL));
 
+    time_started_us = esp_timer_get_time();
+
     return ESP_OK;
 }
 
@@ -571,4 +575,26 @@ void pipeline_playback_unpause(void)
 void pipeline_playback_set_filename(const char *file)
 {
     filename = file;
+}
+
+void pipeline_playback_status(const char side, char *buf, size_t buf_size)
+{
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
+    switch (el_state) {
+        case AEL_STATE_RUNNING: {
+            int64_t progress_seconds = (esp_timer_get_time() - time_started_us) / 1000000;
+            char tape_id[6] = "?????";
+            tapefile_read_tapeid(side, tape_id);
+            snprintf(buf, buf_size, "PLAYBACK %s %d", tape_id, (int)progress_seconds);
+        }
+            break;
+        case AEL_STATE_STOPPED:
+        default:
+            snprintf(buf, buf_size, "playback stopped");
+            break;
+        case AEL_STATE_FINISHED:
+            snprintf(buf, buf_size, "playback completed");
+            break;
+    }
 }

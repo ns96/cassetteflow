@@ -57,7 +57,7 @@ void pipeline_set_side(const char side)
 {
     ESP_LOGI(TAG, "set_side: %c", side);
 
-    if (pipeline_mode == MODE_DECODE || !pipeline_encode_is_running()) {
+    if (pipeline_mode == MODE_DECODE || pipeline_mode == MODE_PLAYBACK || !pipeline_encode_is_running()) {
         current_encoding_side = side;
     }
 }
@@ -159,7 +159,7 @@ void pipeline_current_info_str(char *str, size_t str_len)
             pipeline_encode_status(current_encoding_side, str, str_len);
             break;
         case MODE_PLAYBACK:
-            snprintf(str, str_len, "playback");
+            pipeline_playback_status(current_encoding_side, str, str_len);
             break;
         case MODE_PASSTHROUGH:
             snprintf(str, str_len, "passthrough");
@@ -212,6 +212,8 @@ esp_err_t pipeline_start_playing(const char side)
     if (!tapefile_is_present(side)) {
         return ESP_FAIL;
     }
+
+    current_encoding_side = side;
 
     pipeline_playback_set_filename(tapefile_get_path(side));
 
