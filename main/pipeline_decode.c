@@ -36,7 +36,7 @@ static const char *TAG_RESAMPLE = "resample";
 #define PLAYBACK_RATE       48000
 
 // time in millis to wait for new data from minimodem before considering the tape is stopped
-#define MINIMODEM_WAIT_TIME (pdMS_TO_TICKS(1000))
+#define MINIMODEM_WAIT_TIME (pdMS_TO_TICKS(500))
 
 // playback of mp3 files from sd card with equalizer
 static audio_pipeline_handle_t pipeline_for_play = NULL;
@@ -420,11 +420,17 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
             return ESP_OK;
         }
     } else {
-        // read mp3 info from the mp3 DB
+        // check that the mp3_id is not the special dynamic content track ID
+        if (strcmp(mp3_id, "aaaaaaaaaa") == 0) {
+            ESP_LOGI(TAG, "Processing Dynamic Content Track ...");
+            return ESP_OK;
+        }
+
+        // if we couldn't get mp3/flac file from the mp3 DB, log error
         if (audiodb_file_for_id(mp3_id, current_playing_audio_filepath,
                                 &current_playing_audio_duration,
                                 &current_playing_audio_avg_bitrate) != ESP_OK) {
-            ESP_LOGE(TAG, "could get file for audioid: %s", mp3_id);
+            ESP_LOGE(TAG, "could not get file for audioId: %s", mp3_id);
             return ESP_FAIL;
         }
     }
@@ -548,6 +554,12 @@ esp_err_t pipeline_decode_event_loop(audio_event_iface_handle_t evt)
         esp_err_t ret = audio_event_iface_listen(evt, &msg, MINIMODEM_WAIT_TIME);
         if (ret != ESP_OK) {
             ESP_LOGW(TAG, "Timeout waiting for line data");
+
+            // need to add message so that http server can send line data indicating
+            // that playback was stopped.
+            raw_queue_message_t msg;
+            strcpy(msg.line, "### NOCARRIER");
+            raw_queue_send(0, &msg);
 
             if (last_line_from_minimodem_time_us > 0
                     && esp_timer_get_time() - last_line_from_minimodem_time_us > MINIMODEM_WAIT_TIME * 1000) {
