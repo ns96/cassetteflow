@@ -4,6 +4,7 @@
 
 #include <esp_log.h>
 #include <board.h>
+#include "display_service.h"
 #include "led.h"
 
 static const char *TAG = "cf_led";

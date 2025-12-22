@@ -178,6 +178,11 @@ void app_main(void)
     esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
     set = esp_periph_set_init(&periph_cfg);
 
+    ESP_LOGI(TAG, "[ 2 ] Init board");
+    board_handle = audio_board_init();
+    audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH,
+                         AUDIO_HAL_CTRL_START);
+
     ESP_LOGI(TAG, "[1.1] Initialize and start peripherals");
     audio_board_sdcard_init(set, SD_MODE_1_LINE);
     // init keys after SD card to make Vol- work
@@ -188,11 +193,6 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[1.3] Scan for new MP3 files on SD card");
     ESP_ERROR_CHECK(audiodb_scan());
-
-    ESP_LOGI(TAG, "[ 2 ] Init board");
-    board_handle = audio_board_init();
-    audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH,
-                         AUDIO_HAL_CTRL_START);
 
     ESP_LOGI(TAG, "[ 3 ] Connect to the network");
     ESP_ERROR_CHECK(network_connect());

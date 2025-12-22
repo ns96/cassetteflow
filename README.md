@@ -1,72 +1,132 @@
-# Cassette Flow
+# Cassette Flow Firmware
 
-## Initial setup
+This project is a custom firmware for ESP32-based audio boards, originally designed for the **ESP32-LyraT v4.3** and ported to the **Ai-Thinker ESP32-A1S-AudioKit**.
 
-1. [Setup ESP-IDF](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/index.html#step-1-set-up-esp-idf), use ESP-IDF [v4.3.2](https://github.com/espressif/esp-idf/releases/tag/v4.3.2)
-2. [Setup ESP-ADF](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/index.html#step-2-get-esp-adf), use latest master version
-3. Patch ESP-ADF to enable audio capture from AUX_IN input. In file `esp-adf/components/audio_board/lyrat_v4_3/board_def.h` change line 49 from:
+## Supported Boards
 
-````
-.adc_input  = AUDIO_HAL_ADC_INPUT_LINE1,        \
-````
-to
-````
-.adc_input  = AUDIO_HAL_ADC_INPUT_LINE2,        \
-````
+*   **Ai-Thinker ESP32-A1S-AudioKit** (ES8388 Codec Version) - *Default Configuration*
+*   **ESP32-LyraT v4.3**
 
-## Note: After updating git repositories(ESP-IDF or ESP-ADF) or change branch you need update submodules:
-In cloned repository directory execute command: `git submodule update --init --recursive` and rebuild project.
- 
-## Wi-Fi configuration
+## Building for Ai-Thinker ESP32-A1S-AudioKit
 
-1. Create wifi_config.txt in the root of the SD card
-2. Add one line in the following format: `<WiFIAP>\t<password>` (WiFi AP and password separated with TAB on one line)
-- or
-1. Open main/config.h
-2. Set CONFIG_WIFI_SSID and CONFIG_WIFI_PASSWORD to your Wi-Fi AP
+The project is currently configured by default for the Ai-Thinker board using a custom component in `components/audio_board`.
 
-## Develop/Build/Flash project
+### Prerequisites
+*   [ESP-IDF v4.3+](https://docs.espressif.com/projects/esp-idf/en/v4.3.2/esp32/get-started/index.html) (v4.3.2 is verified)
+*   [ESP-ADF](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/index.html)
 
-1. Open terminal in the project's folder and run to set ESP-IDF environment variables: `. $HOME/esp/esp-idf/export.sh`
-2. Build project: `idf.py build`
-3. Enter upload mode: Manually by pressing both Boot and RST keys and then releasing first RST and then Boot key.
-4. Flash project: `idf.py flash`
+### Build Steps
+1.  Navigate to the project directory.
+2.  Clean the build (optional but recommended):
+    ```bash
+    idf.py fullclean
+    ```
+3.  Build the project:
+    ```bash
+    idf.py build
+    ```
+4.  Flash and Monitor:
+    ```bash
+    idf.py -p <PORT> flash monitor
+    ```
 
-## Develop/Build project in CLion
+### Key Board Modifications
+*   **MCLK Generation**: MCLK is force-enabled on **GPIO 0** within `board.c` initializtion to support the ES8388 codec.
+*   **SD Card**: Configured for 1-Line mode (`SD_MODE_1_LINE`) to match the hardware connections.
+*   **LEDs**: The standard display service for LEDs is stubbed out as this board uses simple GPIOs.
 
-1. Open project in CLion
-2. Open CLion's terminal and run to set ESP-IDF environment variables: `. $HOME/esp/esp-idf/export.sh`
-3. Edit/update
-4. Build project: `idf.py build`
+---
 
-## Minimodem test commands
+## Building for ESP32-LyraT v4.3
 
-1. Encode: `minimodem --tx 1200 -f wavfile.wav`
-2. Decode: `minimodem -r 1200`
+To target the original LyraT board, you must disable the custom board component and revert to the standard ADF definition.
 
-## CPU load measurement
+### Steps to Switch
+1.  **Disable Custom Component**: Rename or remove the local `components/audio_board` directory so the build system doesn't find it.
+    ```bash
+    mv components/audio_board components/audio_board_disabled
+    ```
+2.  **Configure Menuconfig**:
+    *   Run `idf.py menuconfig`
+    *   Go to **Audio HAL > Audio Board**
+    *   Select **ESP32-LyraT V4.3**
+    *   Save and Exit.
+3.  **Clean and Build**:
+    ```bash
+    idf.py fullclean
+    idf.py build
+    ```
 
-Enable the following configuration options (`idf.py menuconfig`) to get CPU load reported to the serial console every 1 second:
+## Troubleshooting
 
-```
-CONFIG_FREERTOS_USE_TRACE_FACILITY=y
-CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y
-CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
-CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
-CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y
-```
+*   **No Audio (Ai-Thinker)**: Ensure GPIO 0 is not being used by other peripherals, as it is required for the MCLK signal to the codec.
+*   **SD Card Mount Failed**: Ensure the card is formatted FAT32. The A1S board only supports 1-Line mode securely on most revisions.
 
-## Setup CLion
+## Hardware Buttons
 
-1. https://www.jetbrains.com/help/clion/esp-idf.html#cmake-setup
+The buttons on the Ai-Thinker AudioKit are mapped as follows:
 
-## ESP32 LyraT 4.3 board
-1. AUX_IN audio quality issue - https://esp32.com/viewtopic.php?t=12407
+| Button | Label on Board | Function |
+| :--- | :--- | :--- |
+| **REC** | KEY1 (GPIO 36) | **Select Side A** (Switch pipeline to use Side A tape file) |
+| **MODE** | KEY2 (GPIO 13) | **Select Side B** (Switch pipeline to use Side B tape file) |
+| **PLAY** | KEY3 (GPIO 19) | **Play / Passthrough Toggle**<br>- In Decode/Play mode: Switch to Passthrough (Live Input)<br>- In Passthrough: Switch back to Playback<br>- In Encode mode: Start/Stop Recording |
+| **SET** | KEY4 (GPIO 23) | **EQ Toggle** (Cycle Equalizer presets) |
+| **VOL+** | KEY5 (GPIO 18) | **Volume Up** |
+| **VOL-** | KEY6 (GPIO 5)  | **Volume Down** |
 
-## Connect to bluetooth device
-- Get list of aviable bluetooth devices
-HTTP URL: `http://lyra.board.ip/output?device=BT`
-- Switch output to bluetooth and connect to device 'devicename', 
-HTTP URL: `http://lyra.board.ip/output?device=BT&btdevice=devicename`
+## WiFi Configuration
 
-- Switch output to line out, HTTP URL: `http://lyra.board.ip/output?device=SP`
+The device connects to WiFi using credentials loaded from the SD card.
+
+1.  Create a file named `wifi_config.txt` in the root of your SD card.
+2.  Add your SSID and Password separated by a **tab** character.
+    ```
+    YourSSID	YourPassword
+    ```
+3.  If this file is missing, the firmware uses fallback credentials.
+
+To set your own default credentials (if you prefer not to use the SD card), edit `main/config.h` and recompile:
+   ```c
+   #define CONFIG_WIFI_SSID "YourSSID"
+   #define CONFIG_WIFI_PASSWORD "YourPassword"
+   ```
+
+To access the web interface or API, find the IP address via the serial monitor (`idf.py monitor`).
+
+## Web API Reference
+
+The board runs an HTTP server on port 80.
+
+| URI | Method | Description | Parameters |
+| :--- | :--- | :--- | :--- |
+| `/` | GET | Set operation mode | `mode`: `encode`, `decode`, or `pass` |
+| `/play` | GET | Start playback | `side`: `a` or `b` |
+| `/stop` | GET | Stop pipeline | None |
+| `/vol` | GET | Set volume | `value`: 0-100 |
+| `/output` | GET | Set audio output | `device`: `SP` (Speaker) or `BT` (Bluetooth)<br>Optional `btdevice`: Name of BT device |
+| `/eq` | GET | Set Equalizer | `band`: comma-separated list of 10 integer values |
+| `/mp3db` | GET | List MP3 database | None |
+| `/tapedb` | GET | List Tape database | None |
+| `/info` | GET | Get status info | None |
+| `/raw` | GET | Stream raw data | None |
+| `/create` | GET | Create tape config | `side` (a/b), `tape` (length), `mute`, `data` |
+| `/start` | GET | Start encoding | `side`: `a` or `b` |
+
+### Examples
+*   **Set Volume to 80%**: `http://<IP>/vol?value=80`
+*   **Play Side A**: `http://<IP>/play?side=a`
+*   **Switch to Bluetooth**: `http://<IP>/output?device=BT&btdevice=MySpeaker`
+
+## Monitoring CPU Usage
+
+To view real-time CPU usage statistics per task on the serial monitor:
+
+1.  Run `idf.py menuconfig`.
+2.  Navigate to **Component config** -> **FreeRTOS**.
+3.  Enable **Enable FreeRTOS to collect run time stats**.
+4.  Save and Exit.
+5.  Rebuild and flash: `idf.py build flash monitor`.
+
+The console will output a table every second showing task runtimes and CPU percentage.
+
