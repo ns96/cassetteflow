@@ -22,6 +22,7 @@
 #include "raw_queue.h"
 #include "pipeline_output.h"
 #include "bt.h"
+#include "tapefile.h"
 
 static const char *TAG = "cf_pipeline_decode";
 
@@ -62,11 +63,19 @@ static char last_line_from_minimodem[64] = {0};
 // in microseconds
 static int64_t last_line_from_minimodem_time_us = 0;
 
+static FILE *g_mapped_file = NULL;
+static char g_mapped_side = 0;
+// We track the last read line's timestamp to optimize sequential access
+static int g_mapped_last_total_idx = -1;
+
 static bool pause_decode = false;
+static bool dct_mapping_enabled = false;
 
 static enum pipeline_decoder_mode current_audio_type = PIPELINE_DECODER_MP3;
 
+
 static audio_event_iface_handle_t evt_playback;
+static esp_err_t pipeline_decode_handle_no_line_data(void);
 
 static char **make_link_tag(int *tags_number)
 {
@@ -359,17 +368,172 @@ static esp_err_t create_record_pipeline(void)
     return ESP_OK;
 }
 
+
+
+
+static esp_err_t find_mapped_line(const char side, int total_idx, char *out_line) {
+    // 1. Open/Reset file if needed
+    if (g_mapped_file != NULL && g_mapped_side != side) {
+        fclose(g_mapped_file);
+        g_mapped_file = NULL;
+        g_mapped_last_total_idx = -1;
+    }
+
+    if (g_mapped_file == NULL) {
+        const char *filepath = tapefile_get_path(side);
+        g_mapped_file = fopen(filepath, "r");
+        if (!g_mapped_file) {
+            ESP_LOGE(TAG, "Failed to open side file: %s", filepath);
+            return ESP_FAIL;
+        }
+        g_mapped_side = side;
+        g_mapped_last_total_idx = -1;
+    }
+
+    // 2. Check if we need to rewind
+    // If we are looking for a timestamp BEFORE where we last were, we must rewind.
+    // (Unless it's the same index, in which case we might just need to re-read? 
+    //  But typically we read line-by-line. If we just read line X at T, and we want T again, 
+    //  we might be at T+1 in the file. So safely, we should rewind if total_idx <= g_mapped_last_total_idx.
+    //  However, rewinding every time for the same second (which has 4 DCT lines) is inefficient.
+    //  BUT, `g_mapped_last_total_idx` tracks the line we *just read*.
+    //  So if we read T=100. File ptr is at lines for T=101.
+    //  Next request T=100. We are ahead. We MUST rewind.
+    //  Optimization: If we have a mechanism to peek or buffer, we could avoid this. 
+    //  Given the file is small, let's try just rewind. 
+    //  Improving this: Since 1s has 4 lines, maybe we shouldn't advance blindly?
+    //  Actually, we scan UNTIL we find a match.
+    //  If we found a match for T=100, we leave the file ptr at the NEXT line.
+    //  If next request is T=100, we check the next line. 
+    //  If next line is ALSO T=100 (which it is, for audio), we match!
+    //  So we only rewind if total_idx < g_mapped_last_total_idx.
+    
+    if (total_idx < g_mapped_last_total_idx) {
+        ESP_LOGD(TAG, "Rewinding... target %d < last %d", total_idx, g_mapped_last_total_idx);
+        fseek(g_mapped_file, 0, SEEK_SET);
+        g_mapped_last_total_idx = -1;
+    }
+
+    char line[128];
+    long pos_before_line;
+    
+    // 3. Scan forward
+    while (1) {
+        pos_before_line = ftell(g_mapped_file);
+        if (!fgets(line, sizeof(line), g_mapped_file)) {
+            // End of file
+            break;
+        }
+        
+        // clean line
+        line[strcspn(line, "\r\n")] = 0;
+        
+        char tape_id[5];
+        char line_side;
+        int track_num;
+        char mp3_id[11];
+        int playtime_seconds;
+        int playtime_total_seconds;
+        int mute_seconds;
+        bool match = false;
+        
+        // Check Standard Audio Line
+        if (sscanf(line, "%4s%c_%02d_%10s_%04d_%04d",
+                   tape_id, &line_side, &track_num, mp3_id, &playtime_seconds, &playtime_total_seconds) == 6) {
+             
+             if (playtime_total_seconds == total_idx) {
+                 match = true;
+             } else if (playtime_total_seconds > total_idx) {
+                 // We passed it. Target not found (or we missed it).
+                 // But wait, since we only move forward, this implies it's not here.
+                 // However, we must be careful about the "replicated 4 times" logic.
+                 // If total_idx=100. We find 101. 
+                 // Then 100 is effectively missing from the current position onwards.
+                 // Since we handle rewind at the top, if we are here, we started from <= target.
+                 // So if we see > target, we failed.
+                 // BUT: We should push back the line we just read so we don't skip it for next time?
+                 // fseek(g_mapped_file, pos_before_line, SEEK_SET);
+                 // No, if we return FAIL, caller might handle it.
+                 // But to keep state consistent, probably best to rewind one line?
+                 // Let's just break and return FAIL.
+                 // But update last_idx?
+                 g_mapped_last_total_idx = playtime_total_seconds; // we are at 101
+                 // We need to rewind this line so next call for 101 captures it!
+                 fseek(g_mapped_file, pos_before_line, SEEK_SET);
+                 return ESP_FAIL; 
+             }
+             
+             // Update our tracking
+             g_mapped_last_total_idx = playtime_total_seconds;
+        } 
+        // Check Mute Line
+        else if (sscanf(line, "%4s%c_%02d_%10s_%03dM_%04d",
+                   tape_id, &line_side, &track_num, mp3_id, &mute_seconds, &playtime_total_seconds) == 6) {
+             
+             // Mute line acts as a range [playtime_total_seconds, playtime_total_seconds + mute_seconds)
+             if (total_idx >= playtime_total_seconds && total_idx < (playtime_total_seconds + mute_seconds)) {
+                 match = true;
+             } else if (playtime_total_seconds > total_idx) {
+                 // We passed it.
+                 g_mapped_last_total_idx = playtime_total_seconds;
+                 fseek(g_mapped_file, pos_before_line, SEEK_SET);
+                 return ESP_FAIL;
+             }
+             
+             // Update tracking. 
+             // If we matched, we are conceptually "at" total_idx.
+             // If we are inside the mute range, say [100, 104), and target is 102.
+             // Next call 103. We need to match this SAME line again.
+             // So we must REWIND this line if we want to match it again!
+             // Mute lines appear only ONCE.
+             // So if we consumed it for 100, we lose it for 101, 102, 103!
+             // CRITICAL FIX: If matched MUTE line, we must rewind so next call sees it too?
+             // Or we just don't advance?
+             // If we fseek back, we just re-read it endlessly. That's fine if we increment target.
+             
+             if (match) {
+                 // For mute, the SINGLE line covers multiple seconds. 
+                 // So we must NOT consume it until we are past it.
+                 // Reset file ptr to start of this line.
+                 fseek(g_mapped_file, pos_before_line, SEEK_SET);
+                 g_mapped_last_total_idx = total_idx; // Effectively we are here
+             } else {
+                 // If we didn't match (meaning target < start of mute, which shouldn't happen if we scan sequentially? 
+                 // or target >= start+duration -> we passed it).
+                 g_mapped_last_total_idx = playtime_total_seconds + mute_seconds - 1; 
+             }
+        }
+
+        if (match) {
+            strcpy(out_line, line);
+            return ESP_OK;
+        }
+    }
+
+    return ESP_FAIL;
+}
+
 /**
  * Handle line of decoded text from minimodem
  * @param line
  * @return
  */
-static esp_err_t pipeline_decode_handle_line(const char *line)
+/**
+ * Handle line of decoded text from minimodem
+ * @param line
+ * @param prefix prefix for raw output (e.g. "--> " for mapped lines)
+ * @return
+ */
+static esp_err_t pipeline_decode_handle_line_internal(const char *line, const char *prefix)
 {
     const size_t line_len = strlen(line);
 
     raw_queue_message_t msg;
-    strcpy(msg.line, line);
+    if (prefix && prefix[0] != 0) {
+        snprintf(msg.line, sizeof(msg.line), "%s%s", prefix, line);
+    } else {
+        strcpy(msg.line, line);
+    }
     raw_queue_send(0, &msg);
 
     strcpy(last_line_from_minimodem, line);
@@ -386,6 +550,16 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     char mp3_id[11];
     int playtime_seconds;   // seconds
     int playtime_total_seconds; // seconds
+    int mute_seconds = 0;
+
+    // Check for Mute line first
+    if (sscanf(line, "%4s%c_%02d_%10s_%03dM_%04d",
+                   tape_id, &side, &track_num, mp3_id, &mute_seconds, &playtime_total_seconds) == 6) {
+        ESP_LOGI(TAG, "Mute line detected: %s (duration %d)", line, mute_seconds);
+        // Stop playback if playing
+        pipeline_decode_handle_no_line_data();
+        return ESP_OK;
+    }
 
     // b. Once a line of data is processed, then start playback of the indicated MP3 file at the indicated time.
     //  As more lines of data are read from the cassette, compare the MP3 ID/time to the one currently playing.
@@ -423,6 +597,18 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
         // check that the mp3_id is not the special dynamic content track ID
         if (strcmp(mp3_id, "aaaaaaaaaa") == 0) {
             ESP_LOGI(TAG, "Processing Dynamic Content Track ...");
+            
+            if (dct_mapping_enabled) {
+                char mapped_line[128];
+                if (find_mapped_line(side, playtime_total_seconds, mapped_line) == ESP_OK) {
+                    ESP_LOGI(TAG, "DCT Mapped to: %s", mapped_line);
+                    // Recursively handle the mapped line with prefix
+                    return pipeline_decode_handle_line_internal(mapped_line, "--> "); 
+                } else {
+                    ESP_LOGW(TAG, "DCT Mapping not found for totaltime %d", playtime_total_seconds);
+                    // Do NOT stop playback; just ignore this DCT line and keep playing whatever is playing.
+                }
+            }
             return ESP_OK;
         }
 
@@ -470,6 +656,11 @@ static esp_err_t pipeline_decode_handle_line(const char *line)
     strcpy(current_playing_audio_id, mp3_id);
 
     return ESP_OK;
+}
+
+static esp_err_t pipeline_decode_handle_line(const char *line)
+{
+    return pipeline_decode_handle_line_internal(line, "");
 }
 
 static esp_err_t pipeline_decode_handle_no_line_data(void)
@@ -641,6 +832,12 @@ esp_err_t pipeline_decode_stop(void)
 
     el_state = AEL_STATE_STOPPED;
 
+    // close mapped file if open
+    if (g_mapped_file) {
+        fclose(g_mapped_file);
+        g_mapped_file = NULL;
+    }
+
     return ESP_OK;
 }
 
@@ -690,4 +887,18 @@ void pipeline_decode_unpause(void)
 {
     ESP_LOGI(TAG, "Resume Decode");
     pause_decode = false;
+}
+
+void pipeline_decode_set_dct_mapping(bool enabled)
+{
+    dct_mapping_enabled = enabled;
+    ESP_LOGI(TAG, "DCT Mapping: %s", enabled ? "ENABLED" : "DISABLED");
+    if (!enabled) {
+        // Close mapped file to reset state
+        if (g_mapped_file) {
+            fclose(g_mapped_file);
+            g_mapped_file = NULL;
+            g_mapped_last_total_idx = -1;
+        }
+    }
 }

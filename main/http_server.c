@@ -15,6 +15,7 @@
 #include "volume.h"
 #include "bt.h"
 #include <ctype.h>
+#include "pipeline_decode.h"
 
 static const char *TAG = "cf_http_server";
 
@@ -237,6 +238,39 @@ static esp_err_t handler_uri_raw(httpd_req_t *req)
     httpd_resp_set_type(req, "text/plain");
 
     raw_queue_reset(0);
+    pipeline_decode_set_dct_mapping(false);
+
+    while (ret == ESP_OK) {
+        // read current line (up to 10 seconds)
+        raw_queue_message_t msg;
+        ret = raw_queue_get(0, &msg, pdMS_TO_TICKS(10 * 1000));
+        if (ret == ESP_OK) {
+            // send one line at a time
+            strncat(msg.line, "\n", sizeof(msg.line) - 1);
+            ret = httpd_resp_send_chunk(req, msg.line, HTTPD_RESP_USE_STRLEN);
+        }
+    }
+
+    /* End of transmission */
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;
+}
+
+/**
+ * continuously streams the raw decoded line records to the client with DCT mapping enabled.
+ * @param req
+ * @return
+ */
+static esp_err_t handler_uri_dct(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "%s", __FUNCTION__);
+
+    esp_err_t ret = ESP_OK;
+
+    httpd_resp_set_type(req, "text/plain");
+
+    raw_queue_reset(0);
+    pipeline_decode_set_dct_mapping(true);
 
     while (ret == ESP_OK) {
         // read current line (up to 10 seconds)
@@ -598,6 +632,13 @@ static const httpd_uri_t uri_raw = {
     .user_ctx  = NULL
 };
 
+static const httpd_uri_t uri_dct = {
+    .uri       = "/dct",
+    .method    = HTTP_GET,
+    .handler   = handler_uri_dct,
+    .user_ctx  = NULL
+};
+
 static const httpd_uri_t uri_create = {
     .uri       = "/create",
     .method    = HTTP_GET,
@@ -665,6 +706,7 @@ static httpd_handle_t start_webserver(void)
         httpd_register_uri_handler(server, &uri_tapedb);
         httpd_register_uri_handler(server, &uri_info);
         httpd_register_uri_handler(server, &uri_raw);
+        httpd_register_uri_handler(server, &uri_dct);
         httpd_register_uri_handler(server, &uri_create);
         httpd_register_uri_handler(server, &uri_start);
         httpd_register_uri_handler(server, &uri_stop);

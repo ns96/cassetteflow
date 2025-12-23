@@ -191,6 +191,27 @@ esp_err_t audiodb_scan(void)
 {
     ESP_LOGI(TAG, "scan");
 
+    FILE *f = fopen(FILE_AUDIODB, "r");
+    if (f) {
+        int count = 0;
+        int ch;
+        int last_ch = 0;
+        while ((ch = fgetc(f)) != EOF) {
+            if (ch == '\n') {
+                count++;
+            }
+            last_ch = ch;
+        }
+        // Handle case where last line has no newline
+        if (last_ch != '\n' && last_ch != 0) {
+            count++;
+        }
+
+        ESP_LOGI(TAG, "Audio DB exists (%s) with %d entries. Skipping scan", FILE_AUDIODB, count);
+        fclose(f);
+        return ESP_OK;
+    }
+
     // scan for mp3 files
     sdcard_scan(audiodb_sdcard_url_save_cb, "/sdcard", 0, (const char *[]){"mp3", "flac"},
                 2, NULL);
