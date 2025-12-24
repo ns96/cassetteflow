@@ -609,6 +609,11 @@ static esp_err_t pipeline_decode_handle_line_internal(const char *line, const ch
                 } else {
                     ESP_LOGW(TAG, "DCT Mapping not found for totaltime %d", target_time);
                     // Do NOT stop playback; just ignore this DCT line and keep playing whatever is playing.
+                    
+                    // Send message to raw queue so that client knows that mapping failed
+                    raw_queue_message_t msg;
+                    snprintf(msg.line, sizeof(msg.line), "-->DCT Mapping not found for totaltime %d", target_time);
+                    raw_queue_send(0, &msg);
                 }
             }
             return ESP_OK;
