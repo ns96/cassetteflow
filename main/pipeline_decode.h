@@ -12,6 +12,6 @@ void pipeline_decode_status(char *buf, size_t buf_size);
 esp_err_t pipeline_decode_set_equalizer(int band_gain[10]);
 void pipeline_decode_unpause(void);
 void pipeline_decode_pause(void);
-void pipeline_decode_set_dct_mapping(bool enabled);
+void pipeline_decode_set_dct_mapping(bool enabled, int offset);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_PIPELINE_DECODE_H

@@ -70,6 +70,7 @@ static int g_mapped_last_total_idx = -1;
 
 static bool pause_decode = false;
 static bool dct_mapping_enabled = false;
+static int dct_mapping_offset = 0;
 
 static enum pipeline_decoder_mode current_audio_type = PIPELINE_DECODER_MP3;
 
@@ -600,12 +601,13 @@ static esp_err_t pipeline_decode_handle_line_internal(const char *line, const ch
             
             if (dct_mapping_enabled) {
                 char mapped_line[128];
-                if (find_mapped_line(side, playtime_total_seconds, mapped_line) == ESP_OK) {
-                    ESP_LOGI(TAG, "DCT Mapped to: %s", mapped_line);
+                int target_time = playtime_total_seconds + dct_mapping_offset;
+                if (find_mapped_line(side, target_time, mapped_line) == ESP_OK) {
+                    ESP_LOGI(TAG, "DCT Mapped %d to: %s", target_time, mapped_line);
                     // Recursively handle the mapped line with prefix
                     return pipeline_decode_handle_line_internal(mapped_line, "--> "); 
                 } else {
-                    ESP_LOGW(TAG, "DCT Mapping not found for totaltime %d", playtime_total_seconds);
+                    ESP_LOGW(TAG, "DCT Mapping not found for totaltime %d", target_time);
                     // Do NOT stop playback; just ignore this DCT line and keep playing whatever is playing.
                 }
             }
@@ -889,16 +891,19 @@ void pipeline_decode_unpause(void)
     pause_decode = false;
 }
 
-void pipeline_decode_set_dct_mapping(bool enabled)
+
+
+void pipeline_decode_set_dct_mapping(bool enabled, int offset)
 {
     dct_mapping_enabled = enabled;
-    ESP_LOGI(TAG, "DCT Mapping: %s", enabled ? "ENABLED" : "DISABLED");
+    dct_mapping_offset = offset; // Added assignment
+    ESP_LOGI(TAG, "DCT Mapping: %s (Offset: %d)", enabled ? "ENABLED" : "DISABLED", offset); // Updated log message
     if (!enabled) {
         // Close mapped file to reset state
         if (g_mapped_file) {
             fclose(g_mapped_file);
             g_mapped_file = NULL;
-            g_mapped_last_total_idx = -1;
         }
+        g_mapped_last_total_idx = -1; // Moved this line outside the inner if block
     }
 }

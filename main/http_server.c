@@ -238,7 +238,7 @@ static esp_err_t handler_uri_raw(httpd_req_t *req)
     httpd_resp_set_type(req, "text/plain");
 
     raw_queue_reset(0);
-    pipeline_decode_set_dct_mapping(false);
+    pipeline_decode_set_dct_mapping(false, 0);
 
     while (ret == ESP_OK) {
         // read current line (up to 10 seconds)
@@ -269,8 +269,22 @@ static esp_err_t handler_uri_dct(httpd_req_t *req)
 
     httpd_resp_set_type(req, "text/plain");
 
+    int offset = 0;
+    size_t buf_len = httpd_req_get_url_query_len(req) + 1;
+    if (buf_len > 1) {
+        char *buf = malloc(buf_len);
+        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+            char param[32];
+            if (httpd_query_key_value(buf, "offset", param, sizeof(param)) == ESP_OK) {
+                offset = atoi(param);
+                ESP_LOGI(TAG, "Found URL query parameter => offset=%d", offset);
+            }
+        }
+        free(buf);
+    }
+
     raw_queue_reset(0);
-    pipeline_decode_set_dct_mapping(true);
+    pipeline_decode_set_dct_mapping(true, offset);
 
     while (ret == ESP_OK) {
         // read current line (up to 10 seconds)

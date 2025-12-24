@@ -110,13 +110,37 @@ The board runs an HTTP server on port 80.
 | `/tapedb` | GET | List Tape database | None |
 | `/info` | GET | Get status info | None |
 | `/raw` | GET | Stream raw data | None |
+| `/dct` | GET | Enable DCT mapping | Optional `offset`: integer seconds |
 | `/create` | GET | Create tape config | `side` (a/b), `tape` (length), `mute`, `data` |
 | `/start` | GET | Start encoding | `side`: `a` or `b` |
 
 ### Examples
+
+**General Control**
+*   **Set Mode to Encode**: `http://<IP>/?mode=encode`
+*   **Set Mode to Decode (Play)**: `http://<IP>/?mode=decode`
+*   **Set Mode to Passthrough**: `http://<IP>/?mode=pass`
+*   **Stop All Operations**: `http://<IP>/stop`
+*   **Get System Info**: `http://<IP>/info`
 *   **Set Volume to 80%**: `http://<IP>/vol?value=80`
+
+**Playback**
 *   **Play Side A**: `http://<IP>/play?side=a`
-*   **Switch to Bluetooth**: `http://<IP>/output?device=BT&btdevice=MySpeaker`
+*   **Play Side B**: `http://<IP>/play?side=b`
+*   **Switch Output to Bluetooth**: `http://<IP>/output?device=BT&btdevice=MySpeaker`
+*   **Switch Output to Speaker**: `http://<IP>/output?device=SP`
+*   **Set Equalizer**: `http://<IP>/eq?band=-2,0,2,4,2,0,-2,-4,-2,0` (10 bands)
+
+**Tape & Database**
+*   **List MP3 Database**: `http://<IP>/mp3db`
+*   **List Tape Database**: `http://<IP>/tapedb`
+*   **Create Tape Config**: `http://<IP>/create?side=a&tape=60&mute=5&data=0001,mp3_1,mp3_2...`
+*   **Start Encoding Side A**: `http://<IP>/start?side=a`
+
+**Data Streaming**
+*   **Stream Raw Line Data**: `http://<IP>/raw`
+*   **Enable DCT Mapping**: `http://<IP>/dct`
+*   **Enable DCT Mapping with Offset**: `http://<IP>/dct?offset=1800` (Shift mapping by 30 mins)
 
 ## Monitoring CPU Usage
 
