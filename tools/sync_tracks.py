@@ -3,24 +3,27 @@ import shutil
 import argparse
 import time
 from pathlib import Path
-import platform
 
 # ==========================================
-# Configuration
+# Configuration (Can be overridden by args)
 # ==========================================
 SOURCE_DIR = r"C:\mp3files" 
 DEST_DIR = r"D:/"
 # ==========================================
 
-def get_filename_from_path(path_str):
-    path_str = path_str.replace('\\', '/')
-    return path_str.split('/')[-1]
+def get_relative_path_key(path_str):
+    """Normalize path to use forward slashes for consistent key lookup"""
+    return path_str.replace('\\', '/').strip()
 
 def parse_audiodb(db_path):
-    allowed_files = set()
+    """
+    Parses audiodb.txt.
+    Returns a dict: { relative_source_path -> sd_card_filename }
+    """
+    mapping = {}
     if not os.path.exists(db_path):
         print(f"Error: audiodb.txt not found at {db_path}")
-        return allowed_files
+        return mapping
 
     print(f"Parsing DB: {db_path}")
     try:
@@ -28,15 +31,35 @@ def parse_audiodb(db_path):
             for line in f:
                 if not line.strip(): continue
                 parts = line.strip().split('\t')
+                
+                # Expecting at least 4 columns.
+                # Col 0: Hash
+                # Col 1: Length
+                # Col 2: Bitrate
+                # Col 3: /sdcard/SD_FILENAME
+                # Col 4: RELATIVE_SOURCE_PATH (New!)
+                
                 if len(parts) >= 4:
-                    full_path = parts[3]
-                    filename = get_filename_from_path(full_path).strip()
-                    if filename:
-                        allowed_files.add(filename.lower())
+                    sd_path_full = parts[3] # e.g. /sdcard/song_HASH.mp3
+                    sd_filename = sd_path_full.split('/')[-1] # song_HASH.mp3
+                    
+                    if len(parts) >= 5:
+                        rel_path = parts[4]
+                        key = get_relative_path_key(rel_path)
+                        mapping[key] = sd_filename
+                    else:
+                        # Fallback for old DB format (or if line is malformed)
+                        # Assume filename based mapping if relative path missing?
+                        # But for this script to work robustly, we really need the relative path.
+                        # We will try to use filename as key if rel path missing, but warn.
+                        print(f"Warning: Line missing relative path column: {line.strip()[:50]}...")
+                        # If the file is in root, finding it by filename might work.
+                        pass
+                        
     except Exception as e:
         print(f"Error reading audiodb.txt: {e}")
     
-    return allowed_files
+    return mapping
 
 def format_size(size_bytes):
     gb = size_bytes / (1024**3)
@@ -49,19 +72,21 @@ def sync_tracks(source_root, dest_root, dry_run=False, limit=None):
     start_time = time.time()
     
     db_path = os.path.join(source_root, 'audiodb.txt')
-    allowed_files = parse_audiodb(db_path)
-    print(f"DEBUG: Total distinct Allowed Filenames in DB: {len(allowed_files)}")
+    file_map = parse_audiodb(db_path)
+    
+    print(f"DEBUG: Loaded {len(file_map)} mappings from DB.")
+    
+    if not file_map:
+        print("Aborting: No valid mappings found in audiodb.txt")
+        return
+
     if limit:
         print(f"DEBUG: Limit set to {limit} files")
 
     files_found = 0
     files_copied = 0
+    files_skipped = 0
     
-    # Track unique filenames we have actually processed/copied to destination
-    # to avoid duplicates and ensure copied_count <= allowed_count
-    processed_filenames = set()
-    collisions = []
-
     stats = {
         'mp3': {'count': 0, 'bytes': 0},
         'flac': {'count': 0, 'bytes': 0},
@@ -78,6 +103,7 @@ def sync_tracks(source_root, dest_root, dry_run=False, limit=None):
 
     print(f"\nScanning {source_root} for mp3/flac files...")
 
+    # We walk the source directory to find physical files
     for root, dirs, files in os.walk(source_root):
         if limit and files_copied >= limit:
             break
@@ -90,23 +116,23 @@ def sync_tracks(source_root, dest_root, dry_run=False, limit=None):
             if ext in ['.mp3', '.flac']:
                 files_found += 1
                 
-                fname_lower = file.lower()
+                src_file_abs = os.path.join(root, file)
                 
-                if fname_lower in allowed_files:
-                    # Check for collision (have we already seen this filename?)
-                    if fname_lower in processed_filenames:
-                        src_path_display = os.path.join(root, file)
-                        collisions.append(src_path_display)
-                        continue
-
-                    # Mark as processed
-                    processed_filenames.add(fname_lower)
-
-                    src_file = os.path.join(root, file)
-                    dst_file = os.path.join(dest_root, file)
+                # Calculate relative path from source_root
+                try:
+                    rel_path = os.path.relpath(src_file_abs, source_root)
+                    rel_key = get_relative_path_key(rel_path)
+                except ValueError:
+                    print(f"Skipping file outside source root: {src_file_abs}")
+                    continue
+                
+                # Check if this file is in our DB map
+                if rel_key in file_map:
+                    sd_filename = file_map[rel_key]
+                    dst_file_abs = os.path.join(dest_root, sd_filename)
                     
                     try:
-                        fsize = os.path.getsize(src_file)
+                        fsize = os.path.getsize(src_file_abs)
                     except:
                         fsize = 0
 
@@ -121,16 +147,24 @@ def sync_tracks(source_root, dest_root, dry_run=False, limit=None):
                         stats['other']['bytes'] += fsize
 
                     if dry_run:
+                        print(f"[DRY RUN] Would copy: {rel_path} -> {sd_filename}")
                         files_copied += 1
                     else:
                         try:
-                            shutil.copy2(src_file, dst_file)
+                            # Only copy if size/mtime different? Or always?
+                            # For safety/simplicity, logic here overwrites. 
+                            # Optimizable later.
+                            shutil.copy2(src_file_abs, dst_file_abs)
                             files_copied += 1
                         except Exception as e:
                             print(f"Failed to copy {file}: {e}")
                     
                     if files_copied > 0 and files_copied % 100 == 0:
-                        print(f"Progress: {files_copied} files {'scanned (Dry Run)' if dry_run else 'copied'}...")
+                        print(f"Progress: {files_copied} files copied...")
+                else:
+                    # File on disk but not in DB (maybe index outdated?)
+                    files_skipped += 1
+                    # print(f"Skipping (Not in DB): {rel_path}")
 
     # Copy audiodb.txt
     if not dry_run and os.path.exists(db_path):
@@ -144,7 +178,6 @@ def sync_tracks(source_root, dest_root, dry_run=False, limit=None):
 
     end_time = time.time()
     duration = end_time - start_time
-
     total_bytes = stats['mp3']['bytes'] + stats['flac']['bytes'] + stats['other']['bytes']
 
     print("\n" + "="*40)
@@ -154,32 +187,28 @@ def sync_tracks(source_root, dest_root, dry_run=False, limit=None):
     print(f"Destination:        {dest_root}")
     if limit:
         print(f"Limit:              {limit} files")
-    print(f"Files Allowed (DB): {len(allowed_files)}")
-    print(f"Files Found (Scanned): {files_found}")
+    print(f"Files in DB:        {len(file_map)}")
+    print(f"Files Scanned:      {files_found}")
+    print(f"Files Skipped:      {files_skipped} (Not in DB)")
     print("-" * 40)
     print("Files Copied Details:")
     print(f"  MP3:  {stats['mp3']['count']:>5} files | {format_size(stats['mp3']['bytes'])}")
     print(f"  FLAC: {stats['flac']['count']:>5} files | {format_size(stats['flac']['bytes'])}")
     print("-" * 40)
     print(f"TOTAL:  {files_copied:>5} files | {format_size(total_bytes)}")
-    print(f"Collisions Skipped: {len(collisions)}")
-    if len(collisions) > 0:
-        print("  (Duplicate filenames found in source were skipped to prevent overwrite)")
     print(f"Time Elapsed:       {duration:.2f} seconds")
     print("="*40)
 
 def main():
-    parser = argparse.ArgumentParser(description="Sync MP3/FLAC files to SD card based on audiodb.txt")
-    parser.add_argument("--dry-run", action="store_true", help="Scan and list files without copying")
-    parser.add_argument("--limit", type=int, help="Limit number of files to copy (for testing)")
+    parser = argparse.ArgumentParser(description="Sync MP3/FLAC files to SD card using relative paths from audiodb.txt")
+    parser.add_argument("--dry-run", action="store_true", help="Scan without copying")
+    parser.add_argument("--limit", type=int, help="Limit number of files to copy")
+    parser.add_argument("--source", type=str, default=SOURCE_DIR, help="Source directory")
+    parser.add_argument("--dest", type=str, default=DEST_DIR, help="Destination directory")
 
     args = parser.parse_args()
     
-    if "PUT_SOURCE_PATH_HERE" in SOURCE_DIR:
-        print("CRITICAL: You must set SOURCE_DIR in the script")
-        return
-
-    sync_tracks(SOURCE_DIR, DEST_DIR, args.dry_run, args.limit)
+    sync_tracks(args.source, args.dest, args.dry_run, args.limit)
 
 if __name__ == "__main__":
     main()

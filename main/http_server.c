@@ -16,6 +16,7 @@
 #include "bt.h"
 #include <ctype.h>
 #include "pipeline_decode.h"
+#include "config.h"
 
 static const char *TAG = "cf_http_server";
 
@@ -186,10 +187,11 @@ static esp_err_t handler_uri_root(httpd_req_t *req)
             }
         }
         free(buf);
+        /* Respond with empty body */
+        httpd_resp_send(req, NULL, 0);
+    } else {
+        httpd_resp_sendstr(req, FIRMWARE_VERSION_STRING);
     }
-
-    /* Respond with empty body */
-    httpd_resp_send(req, NULL, 0);
 
     return ESP_OK;
 }
@@ -357,6 +359,7 @@ static esp_err_t handler_uri_create(httpd_req_t *req)
     switch (err) {
         case ESP_OK:
             /* Respond with empty body */
+            pipeline_decode_reload_mapping();
             httpd_resp_send(req, NULL, 0);
             break;
         case ESP_ERR_INVALID_SIZE:

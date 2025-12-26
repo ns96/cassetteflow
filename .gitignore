@@ -175,3 +175,7 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+#do not copy the duplicates.txt file
+duplicates.txt
+
+

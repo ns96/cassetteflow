@@ -13,5 +13,6 @@ esp_err_t pipeline_decode_set_equalizer(int band_gain[10]);
 void pipeline_decode_unpause(void);
 void pipeline_decode_pause(void);
 void pipeline_decode_set_dct_mapping(bool enabled, int offset);
+void pipeline_decode_reload_mapping(void);
 
 #endif //CASSETTEFLOW_FIRMWARE_MAIN_PIPELINE_DECODE_H

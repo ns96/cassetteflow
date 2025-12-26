@@ -71,6 +71,7 @@ static int g_mapped_last_total_idx = -1;
 static bool pause_decode = false;
 static bool dct_mapping_enabled = false;
 static int dct_mapping_offset = 0;
+static bool g_reload_mapped_file = false;
 
 static enum pipeline_decoder_mode current_audio_type = PIPELINE_DECODER_MP3;
 
@@ -374,6 +375,16 @@ static esp_err_t create_record_pipeline(void)
 
 static esp_err_t find_mapped_line(const char side, int total_idx, char *out_line) {
     // 1. Open/Reset file if needed
+    if (g_reload_mapped_file) {
+        ESP_LOGI(TAG, "Reloading mapped file requested.");
+        if (g_mapped_file != NULL) {
+            fclose(g_mapped_file);
+            g_mapped_file = NULL;
+        }
+        g_mapped_last_total_idx = -1;
+        g_reload_mapped_file = false;
+    }
+
     if (g_mapped_file != NULL && g_mapped_side != side) {
         fclose(g_mapped_file);
         g_mapped_file = NULL;
@@ -901,14 +912,22 @@ void pipeline_decode_unpause(void)
 void pipeline_decode_set_dct_mapping(bool enabled, int offset)
 {
     dct_mapping_enabled = enabled;
-    dct_mapping_offset = offset; // Added assignment
-    ESP_LOGI(TAG, "DCT Mapping: %s (Offset: %d)", enabled ? "ENABLED" : "DISABLED", offset); // Updated log message
-    if (!enabled) {
-        // Close mapped file to reset state
-        if (g_mapped_file) {
-            fclose(g_mapped_file);
-            g_mapped_file = NULL;
-        }
-        g_mapped_last_total_idx = -1; // Moved this line outside the inner if block
+    dct_mapping_offset = offset;
+    ESP_LOGI(TAG, "DCT Mapping: %s (Offset: %d)", enabled ? "ENABLED" : "DISABLED", offset);
+    // Request reload to ensure fresh file state, especially if re-enabling
+    g_reload_mapped_file = true;
+    
+    // Immediate cleanup if disabling (optional as reload flag handles next access, but good for cleanliness)
+    if (!enabled && g_mapped_file) {
+        fclose(g_mapped_file);
+        g_mapped_file = NULL;
+        g_mapped_last_total_idx = -1;
+        g_reload_mapped_file = false; // Already handled
     }
+}
+
+void pipeline_decode_reload_mapping(void)
+{
+    g_reload_mapped_file = true;
+    ESP_LOGI(TAG, "DCT Mapping reload requested");
 }

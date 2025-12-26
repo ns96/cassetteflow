@@ -8,6 +8,7 @@
 #include <sdcard_scan.h>
 #include <mbedtls/md.h>
 #include <string.h>
+#include <stdlib.h>
 #include "audiodb.h"
 #include "internal.h"
 #include "mp3info.h"
@@ -72,39 +73,59 @@ static esp_err_t audiodb_file_save(const char *filepath)
     return ESP_OK;
 }
 
-/**
- * Check if file present in the DB
- * @param filepath full path with filename (/sdcard/file.mp3(.flac))
- * @return true if file is already in the db
- */
 static bool audiodb_file_exists(const char *filepath)
 {
     FILE *fd_db;
-    char *line_file;
+    char *line_buf;
     bool found = false;
 
-    line_file = malloc(AUDIODB_MAX_LINE_LENGTH);
-    if (line_file == NULL) {
+    line_buf = malloc(AUDIODB_MAX_LINE_LENGTH);
+    if (line_buf == NULL) {
         return false;
     }
 
     fd_db = fopen(FILE_AUDIODB, "r");
     if (!fd_db) {
         ESP_LOGE(TAG, "Failed to open DB : %s", FILE_AUDIODB);
-        free(line_file);
+        free(line_buf);
         return false;
     }
 
     // read DB line by line
-    while (fscanf(fd_db, "%*s\t%*d\t%*d\t%1024[^\n]\n", line_file) == 1) {
-        if (strcmp(filepath, line_file) == 0) {
-            // file present in the DB
+    while (fgets(line_buf, AUDIODB_MAX_LINE_LENGTH, fd_db) != NULL) {
+        // Parse line: HASH\tDUR\tBIT\tPATH[\tEXTRA]
+        // We only care about the PATH column (idx 3)
+        // Tokenize? or just iterate tabs?
+        // Use manual iteration to handle spaces in filenames correctly (though filenames shouldn't have tabs)
+
+        char *ptr = line_buf;
+        int tab_count = 0;
+        char *path_start = NULL;
+        
+        while (*ptr != 0 && *ptr != '\n' && *ptr != '\r') {
+            if (*ptr == '\t') {
+                tab_count++;
+                if (tab_count == 3) {
+                    path_start = ptr + 1;
+                    // Find end of path (next tab or newline)
+                    char *path_end = path_start;
+                    while (*path_end != 0 && *path_end != '\t' && *path_end != '\n' && *path_end != '\r') {
+                        path_end++;
+                    }
+                    *path_end = 0; // terminate string
+                    break;
+                }
+            }
+            ptr++;
+        }
+
+        if (path_start && strcmp(filepath, path_start) == 0) {
             found = true;
             break;
         }
     }
 
-    free(line_file);
+    free(line_buf);
     fclose(fd_db);
 
     return found;
@@ -122,44 +143,74 @@ static bool audiodb_file_exists(const char *filepath)
 esp_err_t audiodb_file_for_id(const char *audioid, char *filepath, int *duration, int *avg_bitrate)
 {
     FILE *fd_db;
-    char line_audioid[11];
-    char *line_file;
-    int line_duration = 0;
-    int line_avg_bitrate = 0;
-
+    char *line_buf;
     esp_err_t ret = ESP_FAIL;
 
-    line_file = malloc(AUDIODB_MAX_LINE_LENGTH);
-    if (line_file == NULL) {
+    line_buf = malloc(AUDIODB_MAX_LINE_LENGTH);
+    if (line_buf == NULL) {
         return ESP_FAIL;
     }
 
     fd_db = fopen(FILE_AUDIODB, "r");
     if (!fd_db) {
         ESP_LOGE(TAG, "Failed to open DB : %s", FILE_AUDIODB);
-        free(line_file);
+        free(line_buf);
         return ESP_FAIL;
     }
 
     // read DB line by line
-    while (fscanf(fd_db, "%10s\t%d\t%d\t%1024[^\n]\n", line_audioid, &line_duration, &line_avg_bitrate, line_file) == 4) {
-        if (strcmp(audioid, line_audioid) == 0) {
-            // file present in the DB
+    while (fgets(line_buf, AUDIODB_MAX_LINE_LENGTH, fd_db) != NULL) {
+        // Parse line: HASH\tDUR\tBIT\tPATH[\tEXTRA]
+        char *ptr = line_buf;
+        
+        // 1. Get Hash
+        char *line_hash = ptr;
+        char *next_tab = strchr(ptr, '\t');
+        if (!next_tab) continue;
+        *next_tab = 0;
+        
+        if (strcmp(audioid, line_hash) == 0) {
+            // Found it! Parse the rest.
+            ptr = next_tab + 1;
+            
+            // 2. Get Duration
+            next_tab = strchr(ptr, '\t');
+            if (!next_tab) continue;
+            *next_tab = 0;
+            int line_dur = atoi(ptr);
+            ptr = next_tab + 1;
+            
+            // 3. Get Bitrate
+            next_tab = strchr(ptr, '\t');
+            if (!next_tab) continue;
+            *next_tab = 0;
+            int line_rate = atoi(ptr);
+             ptr = next_tab + 1;
+            
+            // 4. Get Path
+            char *line_path = ptr;
+            // It might end with newline OR tab (if extra columns exist)
+            char *path_end = line_path;
+            while (*path_end != 0 && *path_end != '\t' && *path_end != '\n' && *path_end != '\r') {
+                path_end++;
+            }
+            *path_end = 0;
+            
             if (filepath != NULL) {
-                strcpy(filepath, line_file);
+                strcpy(filepath, line_path);
             }
             if (duration != NULL) {
-                *duration = line_duration;
+                *duration = line_dur;
             }
             if (avg_bitrate != NULL) {
-                *avg_bitrate = line_avg_bitrate;
+                *avg_bitrate = line_rate;
             }
             ret = ESP_OK;
             break;
         }
     }
 
-    free(line_file);
+    free(line_buf);
     fclose(fd_db);
 
     return ret;
